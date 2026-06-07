@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Konuq Hub</title>
+		<link rel="stylesheet" href="/styles.css" />
+	</head>
+	<body>
+		<div class="wrap">
+			<div class="topbar">
+				<div class="brand">
+					<div class="kicker">Konuq</div>
+					<h1 id="hubTitle">Loading…</h1>
+				</div>
+				<div class="actions">
+					<div class="pill" id="statusPill">Fetching</div>
+				</div>
+			</div>
+
+			<div id="grid" class="grid" style="opacity:0;transform:translateY(4px);transition:opacity .22s ease, transform .22s ease"></div>
+			<div id="empty" class="empty" style="display:none"></div>
+		</div>
+
+		<div id="overlay" class="modalOverlay" role="dialog" aria-modal="true">
+			<div class="sheet">
+				<div class="sheetHeader">
+					<div>
+						<h3 id="sheetTitle"></h3>
+						<div class="meta" id="sheetMeta"></div>
+					</div>
+					<button class="btn" id="closeBtn" type="button">Close</button>
+				</div>
+				<div class="sheetBody" id="sheetBody"></div>
+			</div>
+		</div>
+
+		<script>
+			const SUPABASE_URL = "https://frqkwxfdvaqtongvfzoo.supabase.co"
+			const BUCKET = "published_hubs"
+
+			const hubTitleEl = document.getElementById("hubTitle")
+			const statusPillEl = document.getElementById("statusPill")
+			const gridEl = document.getElementById("grid")
+			const emptyEl = document.getElementById("empty")
+			const overlayEl = document.getElementById("overlay")
+			const sheetTitleEl = document.getElementById("sheetTitle")
+			const sheetMetaEl = document.getElementById("sheetMeta")
+			const sheetBodyEl = document.getElementById("sheetBody")
+			const closeBtnEl = document.getElementById("closeBtn")
+
+			const state = {
+				payload: null,
+				shareId: null,
+				selectedCollectionId: null,
+				selectedNoteUuid: null
+			}
+
+			const normalizedTagKey = (raw) => {
+				if (!raw) return ""
+				return String(raw).trim().replace(/^#/, "").toLowerCase()
+			}
+
+			const getShareIdFromPath = () => {
+				const parts = window.location.pathname.split("/").filter(Boolean)
+				const pIndex = parts.indexOf("p")
+				if (pIndex === -1) return null
+				return parts[pIndex + 1] || null
+			}
+
+			const storagePublicURL = (shareId, path) => {
+				return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${encodeURIComponent(shareId)}/${path}`
+			}
+
+			const payloadURL = (shareId) => storagePublicURL(shareId, "payload.json")
+
+			const computeColumnCount = (w) => {
+				if (w < 520) return 2
+				if (w < 760) return 3
+				if (w < 1020) return 4
+				return 5
+			}
+
+			const placeTiles = (tiles, cols) => {
+				const occupied = new Set()
+				const key = (r, c) => `${r}:${c}`
+				const isFree = (r, c) => !occupied.has(key(r, c))
+				const canPlace = (r, c, w, h) => {
+					if (c + w - 1 > cols) return false
+					for (let rr = r; rr < r + h; rr++) {
+						for (let cc = c; cc < c + w; cc++) {
+							if (!isFree(rr, cc)) return false
+						}
+					}
+					return true
+				}
+				const mark = (r, c, w, h) => {
+					for (let rr = r; rr < r + h; rr++) {
+						for (let cc = c; cc < c + w; cc++) {
+							occupied.add(key(rr, cc))
+						}
+					}
+				}
+
+				const result = []
+				let cursorRow = 1
+				for (const t of tiles) {
+					const w = Math.max(1, Math.min(cols, Number(t.spanColumns || 1)))
+					const h = Math.max(1, Number(t.spanRows || 1))
+					let placed = false
+					for (let r = 1; !placed && r < 400; r++) {
+						for (let c = 1; !placed && c <= cols; c++) {
+							if (canPlace(r, c, w, h)) {
+								mark(r, c, w, h)
+								result.push({ id: t.id, row: r, col: c, w, h })
+								placed = true
+								cursorRow = Math.max(cursorRow, r)
+							}
+						}
+					}
+					if (!placed) {
+						result.push({ id: t.id, row: cursorRow, col: 1, w: 1, h: 1 })
+						cursorRow += 1
+					}
+				}
+				return result
+			}
+
+			const resolveImageURL = (mediaReference) => {
+				const payload = state.payload
+				if (!payload || !payload.mediaIndex) return null
+				const rel = payload.mediaIndex[mediaReference]
+				if (!rel) return null
+				return storagePublicURL(state.shareId, rel)
+			}
+
+			const renderEmpty = (title, message) => {
+				hubTitleEl.textContent = title
+				statusPillEl.textContent = "Not available"
+				gridEl.style.display = "none"
+				emptyEl.style.display = "block"
+				emptyEl.innerHTML = ""
+				const strong = document.createElement("strong")
+				strong.textContent = title
+				const d = document.createElement("div")
+				d.style.marginTop = "10px"
+				d.textContent = message
+				emptyEl.appendChild(strong)
+				emptyEl.appendChild(d)
+			}
+
+			const tileTagList = (tags) => {
+				const list = (tags || []).map(normalizedTagKey).filter(Boolean)
+				return list.slice(0, 6)
+			}
+
+			const renderGrid = () => {
+				const payload = state.payload
+				if (!payload) return
+				hubTitleEl.textContent = payload.hub?.title || "Konuq Hub"
+				statusPillEl.textContent = "Public"
+
+				const tiles = (payload.collections || [])
+					.slice()
+					.sort((a, b) => Number(a.position || 0) - Number(b.position || 0))
+
+				const updateColumns = () => {
+					const cols = computeColumnCount(gridEl.clientWidth)
+					gridEl.style.setProperty("--cols", String(cols))
+					const placements = placeTiles(tiles, cols)
+					for (const p of placements) {
+						const el = gridEl.querySelector(`[data-tile-id="${p.id}"]`)
+						if (!el) continue
+						el.style.gridColumn = `${p.col} / span ${p.w}`
+						el.style.gridRow = `${p.row} / span ${p.h}`
+					}
+				}
+
+				gridEl.innerHTML = ""
+				for (const c of tiles) {
+					const tile = document.createElement("div")
+					tile.className = "tile"
+					tile.dataset.tileId = c.id
+
+					const bgUrl = c.backgroundValue && String(c.backgroundValue).startsWith("media:") ? resolveImageURL(c.backgroundValue) : null
+					const isImage = c.backgroundKind === "image" && !!bgUrl
+					if (!isImage) tile.classList.add("noImage")
+
+					if (isImage) {
+						const bg = document.createElement("div")
+						bg.className = "tileBg"
+						bg.style.backgroundImage = `url("${bgUrl}")`
+						tile.appendChild(bg)
+					} else if (c.backgroundKind === "color" && c.backgroundValue) {
+						const v = String(c.backgroundValue)
+						tile.style.background = `linear-gradient(180deg, ${v}, rgba(255,255,255,.70))`
+					}
+
+					const content = document.createElement("div")
+					content.className = "tileContent"
+					const header = document.createElement("div")
+					header.className = "tileHeader"
+					const emoji = document.createElement("div")
+					emoji.className = "emoji"
+					emoji.textContent = c.emoji || "📌"
+					const titleWrap = document.createElement("div")
+					titleWrap.className = "tileTitle"
+					const h2 = document.createElement("h2")
+					h2.textContent = c.showTitle === false ? "" : (c.title || "")
+					titleWrap.appendChild(h2)
+					header.appendChild(emoji)
+					header.appendChild(titleWrap)
+
+					const tags = document.createElement("div")
+					tags.className = "tags"
+					for (const t of tileTagList(c.tags || [])) {
+						const chip = document.createElement("div")
+						chip.className = "tag"
+						chip.textContent = `#${t}`
+						tags.appendChild(chip)
+					}
+
+					content.appendChild(header)
+					content.appendChild(tags)
+					tile.appendChild(content)
+
+					tile.addEventListener("click", () => openCollection(c.id))
+					gridEl.appendChild(tile)
+				}
+
+				const ro = new ResizeObserver(() => updateColumns())
+				ro.observe(gridEl)
+				updateColumns()
+				gridEl.style.opacity = "1"
+				gridEl.style.transform = "translateY(0px)"
+			}
+
+			const notesForCollection = (collection) => {
+				const payload = state.payload
+				if (!payload) return []
+				const requiredTags = (collection.tags || []).map(normalizedTagKey).filter(Boolean)
+				if (!requiredTags.length || collection.isTagsConfirmed === false) return []
+				const required = new Set(requiredTags)
+				return (payload.notes || []).filter((n) => {
+					const tags = new Set((n.tags || []).map(normalizedTagKey).filter(Boolean))
+					for (const t of required) if (!tags.has(t)) return false
+					return true
+				})
+			}
+
+			const noteTitleFromBlocks = (note) => {
+				const blocks = note.blocks || []
+				const title = blocks.find((b) => b.type === "TITLE" && b.markdown && String(b.markdown).trim())
+				if (title) return String(title.markdown).trim()
+				const firstText = blocks.find((b) => b.markdown && String(b.markdown).trim())
+				return firstText ? String(firstText.markdown).trim().slice(0, 40) : "Untitled"
+			}
+
+			const notePreviewFromBlocks = (note) => {
+				const blocks = (note.blocks || []).filter((b) => b.type !== "TITLE")
+				const text = blocks.find((b) => b.markdown && String(b.markdown).trim())
+				return text ? String(text.markdown).trim() : ""
+			}
+
+			const openOverlay = () => overlayEl.classList.add("open")
+			const closeOverlay = () => {
+				overlayEl.classList.remove("open")
+				state.selectedCollectionId = null
+				state.selectedNoteUuid = null
+				sheetBodyEl.innerHTML = ""
+			}
+
+			const openCollection = (collectionId) => {
+				const payload = state.payload
+				if (!payload) return
+				const collection = (payload.collections || []).find((c) => c.id === collectionId)
+				if (!collection) return
+				state.selectedCollectionId = collectionId
+				state.selectedNoteUuid = null
+
+				sheetTitleEl.textContent = `${collection.emoji || "📌"} ${collection.title || ""}`.trim()
+				const tags = (collection.tags || []).map(normalizedTagKey).filter(Boolean).map((t) => `#${t}`)
+				sheetMetaEl.textContent = tags.join("  ")
+				sheetBodyEl.innerHTML = ""
+
+				const notes = notesForCollection(collection)
+				if (!notes.length) {
+					const empty = document.createElement("div")
+					empty.className = "empty"
+					empty.innerHTML = "<strong>No notes</strong><div style='margin-top:10px'>This collection has no matching notes in the published hub.</div>"
+					sheetBodyEl.appendChild(empty)
+					openOverlay()
+					return
+				}
+
+				const cards = document.createElement("div")
+				cards.className = "noteCards"
+				for (const n of notes) {
+					const card = document.createElement("div")
+					card.className = "noteCard"
+					const h = document.createElement("div")
+					h.className = "noteCardTitle"
+					h.textContent = noteTitleFromBlocks(n)
+					const p = document.createElement("p")
+					p.className = "noteCardPreview"
+					p.textContent = notePreviewFromBlocks(n)
+					card.appendChild(h)
+					card.appendChild(p)
+					card.addEventListener("click", () => openNote(n.uuid))
+					cards.appendChild(card)
+				}
+				sheetBodyEl.appendChild(cards)
+				openOverlay()
+			}
+
+			const blockClass = (type) => {
+				switch (type) {
+					case "TITLE": return "block title"
+					case "DESCRIPTION": return "block description"
+					case "HEADING3": return "block h3"
+					case "HEADING4": return "block h4"
+					case "HEADING5": return "block h5"
+					case "HEADING6": return "block h6"
+					case "CODE": return "block code"
+					default: return "block"
+				}
+			}
+
+			const openNote = (noteUuid) => {
+				const payload = state.payload
+				if (!payload) return
+				const note = (payload.notes || []).find((n) => n.uuid === noteUuid)
+				if (!note) return
+				state.selectedNoteUuid = noteUuid
+
+				sheetTitleEl.textContent = "Note"
+				sheetMetaEl.textContent = ""
+				sheetBodyEl.innerHTML = ""
+
+				const reader = document.createElement("div")
+				reader.className = "reader"
+
+				for (const b of (note.blocks || []).slice().sort((a, c) => Number(a.position || 0) - Number(c.position || 0))) {
+					if (b.type === "IMAGE" && b.mediaReference && String(b.mediaReference).startsWith("media:")) {
+						const url = resolveImageURL(b.mediaReference)
+						if (url) {
+							const media = document.createElement("div")
+							media.className = "media"
+							const img = document.createElement("img")
+							img.loading = "lazy"
+							img.decoding = "async"
+							img.src = url
+							img.alt = ""
+							media.appendChild(img)
+							reader.appendChild(media)
+							continue
+						}
+					}
+					if (b.type === "VIDEO" || (b.mediaReference && String(b.mediaReference).startsWith("phasset:"))) {
+						const d = document.createElement("div")
+						d.className = "block"
+						d.textContent = "Video not available on web"
+						reader.appendChild(d)
+						continue
+					}
+
+					const div = document.createElement("div")
+					div.className = blockClass(b.type)
+					div.textContent = b.markdown || ""
+					reader.appendChild(div)
+				}
+
+				sheetBodyEl.appendChild(reader)
+				openOverlay()
+			}
+
+			closeBtnEl.addEventListener("click", () => closeOverlay())
+			overlayEl.addEventListener("click", (e) => {
+				if (e.target === overlayEl) closeOverlay()
+			})
+			window.addEventListener("keydown", (e) => {
+				if (e.key === "Escape") closeOverlay()
+			})
+
+			const load = async () => {
+				const shareId = getShareIdFromPath()
+				if (!shareId) {
+					renderEmpty("Missing link", "No shareId found in URL.")
+					return
+				}
+				state.shareId = shareId
+
+				try {
+					statusPillEl.textContent = "Loading"
+					const res = await fetch(payloadURL(shareId), { cache: "no-store" })
+					if (!res.ok) {
+						renderEmpty("Not found", "This hub link is not available.")
+						return
+					}
+					const payload = await res.json()
+					state.payload = payload
+					document.title = payload?.hub?.title ? `${payload.hub.title} · Konuq` : "Konuq Hub"
+					renderGrid()
+					statusPillEl.textContent = "Ready"
+				} catch {
+					renderEmpty("Load failed", "Unable to fetch the published hub.")
+				}
+			}
+
+			load()
+		</script>
+	</body>
+</html>
