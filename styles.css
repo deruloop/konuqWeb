@@ -218,15 +218,9 @@ a{color:inherit;text-decoration:none}
 }
 
 .emoji{
-	font-size:30px;
+	font-size:clamp(20px, calc(var(--row, 110px) * 0.27), 30px);
 	line-height:1;
 	flex:0 0 auto;
-}
-
-@media (max-width: 560px){
-	.emoji{
-		font-size:24px;
-	}
 }
 
 .tileTitle{
@@ -239,21 +233,17 @@ a{color:inherit;text-decoration:none}
 
 .tileTitle h2{
 	margin:0;
-	font-size:18px;
+	font-size:clamp(13px, calc(var(--row, 110px) * 0.18), 18px);
 	font-weight:600;
-	line-height:1.15;
+	line-height:1.12;
 	letter-spacing:-.02em;
 	padding-bottom:1px;
+	overflow-wrap:anywhere;
+	hyphens:auto;
 	display:-webkit-box;
 	-webkit-line-clamp:2;
 	-webkit-box-orient:vertical;
 	overflow:hidden;
-}
-
-@media (max-width: 560px){
-	.tileTitle h2{
-		font-size:16px;
-	}
 }
 
 .tileCount{
