@@ -303,6 +303,37 @@
 				sheetBodyEl.innerHTML = ""
 			}
 
+			let lockedScrollY = 0
+			const lockBodyScroll = () => {
+				lockedScrollY = window.scrollY || 0
+				document.body.classList.add("modalOpen")
+				document.body.style.position = "fixed"
+				document.body.style.top = `-${lockedScrollY}px`
+				document.body.style.left = "0"
+				document.body.style.right = "0"
+				document.body.style.width = "100%"
+			}
+
+			const unlockBodyScroll = () => {
+				document.body.classList.remove("modalOpen")
+				document.body.style.position = ""
+				document.body.style.top = ""
+				document.body.style.left = ""
+				document.body.style.right = ""
+				document.body.style.width = ""
+				window.scrollTo(0, lockedScrollY)
+			}
+
+			const openOverlayLocked = () => {
+				openOverlay()
+				lockBodyScroll()
+			}
+
+			const closeOverlayLocked = () => {
+				closeOverlay()
+				unlockBodyScroll()
+			}
+
 			const openCollection = (collectionId) => {
 				const payload = state.payload
 				if (!payload) return
@@ -322,7 +353,7 @@
 					empty.className = "empty"
 					empty.innerHTML = "<strong>No notes</strong><div style='margin-top:10px'>This collection has no matching notes in the published hub.</div>"
 					sheetBodyEl.appendChild(empty)
-					openOverlay()
+					openOverlayLocked()
 					return
 				}
 
@@ -343,7 +374,7 @@
 					cards.appendChild(card)
 				}
 				sheetBodyEl.appendChild(cards)
-				openOverlay()
+				openOverlayLocked()
 			}
 
 			const blockClass = (type) => {
@@ -404,16 +435,24 @@
 				}
 
 				sheetBodyEl.appendChild(reader)
-				openOverlay()
+				openOverlayLocked()
 			}
 
-			closeBtnEl.addEventListener("click", () => closeOverlay())
+			closeBtnEl.addEventListener("click", () => closeOverlayLocked())
 			overlayEl.addEventListener("click", (e) => {
-				if (e.target === overlayEl) closeOverlay()
+				if (e.target === overlayEl) closeOverlayLocked()
 			})
 			window.addEventListener("keydown", (e) => {
-				if (e.key === "Escape") closeOverlay()
+				if (e.key === "Escape") closeOverlayLocked()
 			})
+
+			const stopBackgroundScroll = (e) => {
+				if (!overlayEl.classList.contains("open")) return
+				if (sheetBodyEl.contains(e.target)) return
+				e.preventDefault()
+			}
+			overlayEl.addEventListener("wheel", stopBackgroundScroll, { passive: false })
+			overlayEl.addEventListener("touchmove", stopBackgroundScroll, { passive: false })
 
 			const load = async () => {
 				const shareId = getShareIdFromPath()
