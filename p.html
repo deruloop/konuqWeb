@@ -4,6 +4,9 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Konuq Hub</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
 		<link rel="stylesheet" href="/styles.css" />
 	</head>
 	<body>
@@ -64,8 +67,9 @@
 			const getShareIdFromPath = () => {
 				const parts = window.location.pathname.split("/").filter(Boolean)
 				const pIndex = parts.indexOf("p")
-				if (pIndex === -1) return null
-				return parts[pIndex + 1] || null
+				if (pIndex !== -1) return parts[pIndex + 1] || null
+				const params = new URLSearchParams(window.location.search)
+				return params.get("shareId") || null
 			}
 
 			const storagePublicURL = (shareId, path) => {
@@ -73,6 +77,26 @@
 			}
 
 			const payloadURL = (shareId) => storagePublicURL(shareId, "payload.json")
+
+			const COLOR_ASSET_TO_CSS_VAR = {
+				appAccentColor: "--accent",
+				tag1Color: "--tag1",
+				tag2Color: "--tag2",
+				tag3Color: "--tag3",
+				tag4Color: "--tag4",
+				tag5Color: "--tag5",
+				tag6Color: "--tag6",
+				allTagColor: "--tagAll"
+			}
+
+			const resolveColorValue = (raw) => {
+				if (!raw) return null
+				const v = String(raw).trim()
+				if (!v) return null
+				if (v.startsWith("#") || v.startsWith("rgb(") || v.startsWith("rgba(") || v.startsWith("hsl(")) return v
+				const cssVar = COLOR_ASSET_TO_CSS_VAR[v]
+				return cssVar ? `var(${cssVar})` : null
+			}
 
 			const computeColumnCount = (w) => {
 				if (w < 520) return 2
@@ -192,8 +216,8 @@
 						bg.style.backgroundImage = `url("${bgUrl}")`
 						tile.appendChild(bg)
 					} else if (c.backgroundKind === "color" && c.backgroundValue) {
-						const v = String(c.backgroundValue)
-						tile.style.background = `linear-gradient(180deg, ${v}, rgba(255,255,255,.70))`
+						const v = resolveColorValue(c.backgroundValue) ?? "var(--tag3)"
+						tile.style.background = v
 					}
 
 					const content = document.createElement("div")
@@ -211,17 +235,16 @@
 					header.appendChild(emoji)
 					header.appendChild(titleWrap)
 
-					const tags = document.createElement("div")
-					tags.className = "tags"
-					for (const t of tileTagList(c.tags || [])) {
-						const chip = document.createElement("div")
-						chip.className = "tag"
-						chip.textContent = `#${t}`
-						tags.appendChild(chip)
-					}
-
 					content.appendChild(header)
-					content.appendChild(tags)
+					
+					const spanRows = Math.max(1, Number(c.spanRows || 1))
+					if (spanRows > 1) {
+						const count = notesForCollection(c).length
+						const countEl = document.createElement("div")
+						countEl.className = "tileCount"
+						countEl.textContent = `${count} ${count === 1 ? "note" : "notes"}`
+						content.appendChild(countEl)
+					}
 					tile.appendChild(content)
 
 					tile.addEventListener("click", () => openCollection(c.id))
