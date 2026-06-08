@@ -506,6 +506,10 @@
 						return
 					}
 					const payload = await res.json()
+					if (payload && payload.disabled === true) {
+						renderEmpty("Not available", payload.message || "This hub is no longer available.")
+						return
+					}
 					state.payload = payload
 					document.title = payload?.hub?.title ? `${payload.hub.title} · Konuq` : "Konuq Hub"
 					renderGrid()
