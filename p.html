@@ -37,7 +37,10 @@
 						<h3 id="sheetTitle"></h3>
 						<div class="meta" id="sheetMeta"></div>
 					</div>
-					<button class="btn" id="closeBtn" type="button">Close</button>
+					<div class="sheetHeaderActions">
+						<button class="btn" id="backBtn" type="button" style="display:none">Back</button>
+						<button class="btn" id="closeBtn" type="button">Close</button>
+					</div>
 				</div>
 				<div class="sheetBody" id="sheetBody"></div>
 			</div>
@@ -55,6 +58,7 @@
 			const sheetTitleEl = document.getElementById("sheetTitle")
 			const sheetMetaEl = document.getElementById("sheetMeta")
 			const sheetBodyEl = document.getElementById("sheetBody")
+			const backBtnEl = document.getElementById("backBtn")
 			const closeBtnEl = document.getElementById("closeBtn")
 
 			const state = {
@@ -326,6 +330,7 @@
 
 			let lockedScrollY = 0
 			const lockBodyScroll = () => {
+				if (document.body.classList.contains("modalOpen")) return
 				lockedScrollY = window.scrollY || 0
 				document.body.classList.add("modalOpen")
 				document.body.style.position = "fixed"
@@ -353,6 +358,11 @@
 			const closeOverlayLocked = () => {
 				closeOverlay()
 				unlockBodyScroll()
+				backBtnEl.style.display = "none"
+			}
+
+			const showBackButton = (shouldShow) => {
+				backBtnEl.style.display = shouldShow ? "inline-flex" : "none"
 			}
 
 			const openCollection = (collectionId) => {
@@ -362,6 +372,7 @@
 				if (!collection) return
 				state.selectedCollectionId = collectionId
 				state.selectedNoteUuid = null
+				showBackButton(false)
 
 				sheetTitleEl.textContent = `${collection.emoji || "📌"} ${collection.title || ""}`.trim()
 				const tags = (collection.tags || []).map(normalizedTagKey).filter(Boolean).map((t) => `#${t}`)
@@ -417,6 +428,7 @@
 				const note = (payload.notes || []).find((n) => n.uuid === noteUuid)
 				if (!note) return
 				state.selectedNoteUuid = noteUuid
+				showBackButton(!!state.selectedCollectionId)
 
 				sheetTitleEl.textContent = "Note"
 				sheetMetaEl.textContent = ""
@@ -459,6 +471,9 @@
 				openOverlayLocked()
 			}
 
+			backBtnEl.addEventListener("click", () => {
+				if (state.selectedCollectionId) openCollection(state.selectedCollectionId)
+			})
 			closeBtnEl.addEventListener("click", () => closeOverlayLocked())
 			overlayEl.addEventListener("click", (e) => {
 				if (e.target === overlayEl) closeOverlayLocked()
