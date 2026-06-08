@@ -56,12 +56,23 @@ a{color:inherit;text-decoration:none}
 	max-width:1180px;
 	margin:0 auto;
 	padding:28px 18px 56px;
+	min-height:100vh;
+	display:flex;
+	flex-direction:column;
 }
 
 @media (max-width: 560px){
 	.wrap{
 		padding:18px 14px 40px;
 	}
+}
+
+.wrap > #grid{
+	flex:1 0 auto;
+}
+
+.wrap > #empty{
+	flex:1 0 auto;
 }
 
 .topbar{
@@ -282,7 +293,8 @@ a{color:inherit;text-decoration:none}
 .tile:not(.noImage) .tileTitle h2{color:#fff}
 
 .footer{
-	margin-top:22px;
+	margin-top:auto;
+	padding-top:22px;
 	color:var(--muted);
 	font-size:13px;
 	display:flex;
