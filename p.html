@@ -248,6 +248,9 @@
 					content.appendChild(header)
 					
 					const spanRows = Math.max(1, Number(c.spanRows || 1))
+					const spanColumns = Math.max(1, Number(c.spanColumns || 1))
+					const is1x1 = spanRows === 1 && spanColumns === 1
+					if (is1x1) tile.classList.add("tile1x1")
 					if (spanRows > 1) {
 						const count = notesForCollection(c).length
 						const countEl = document.createElement("div")
@@ -259,6 +262,24 @@
 
 					tile.addEventListener("click", () => openCollection(c.id))
 					gridEl.appendChild(tile)
+
+					if (is1x1) {
+						requestAnimationFrame(() => {
+							const maxHeight = content.clientHeight - emoji.offsetHeight - 8
+							if (maxHeight <= 0) return
+							let size = 14
+							h2.style.display = "block"
+							h2.style.whiteSpace = "normal"
+							h2.style.overflow = "hidden"
+							h2.style.webkitLineClamp = "unset"
+							h2.style.webkitBoxOrient = "unset"
+							while (size >= 10) {
+								h2.style.fontSize = `${size}px`
+								if (h2.scrollHeight <= maxHeight) break
+								size -= 1
+							}
+						})
+					}
 				}
 
 				const ro = new ResizeObserver(() => updateColumns())

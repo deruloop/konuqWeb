@@ -217,6 +217,11 @@ a{color:inherit;text-decoration:none}
 	min-width:0;
 }
 
+.tile.tile1x1 .tileHeader{
+	flex-direction:column;
+	gap:6px;
+}
+
 .emoji{
 	font-size:clamp(20px, calc(var(--row, 110px) * 0.27), 30px);
 	line-height:1;
@@ -244,6 +249,13 @@ a{color:inherit;text-decoration:none}
 	-webkit-line-clamp:2;
 	-webkit-box-orient:vertical;
 	overflow:hidden;
+}
+
+.tile.tile1x1 .tileTitle h2{
+	display:block;
+	-webkit-line-clamp:unset;
+	-webkit-box-orient:unset;
+	overflow:visible;
 }
 
 .tileCount{
