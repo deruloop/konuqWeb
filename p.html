@@ -23,6 +23,11 @@
 
 			<div id="grid" class="grid" style="opacity:0;transform:translateY(4px);transition:opacity .22s ease, transform .22s ease"></div>
 			<div id="empty" class="empty" style="display:none"></div>
+
+			<div class="footer">
+				<span>Made with</span>
+				<a class="footerLink" href="https://apps.apple.com/app/id0000000000" target="_blank" rel="noopener noreferrer">Konuq</a>
+			</div>
 		</div>
 
 		<div id="overlay" class="modalOverlay" role="dialog" aria-modal="true">
@@ -98,11 +103,12 @@
 				return cssVar ? `var(${cssVar})` : null
 			}
 
-			const computeColumnCount = (w) => {
-				if (w < 520) return 2
-				if (w < 760) return 3
-				if (w < 1020) return 4
-				return 5
+			const computeColumnCount = (width, spacing) => {
+				const minColumns = 4
+				const maxColumns = 10
+				const idealCellSize = 110
+				const raw = Math.floor((width + spacing) / (idealCellSize + spacing))
+				return Math.max(minColumns, Math.min(raw, maxColumns))
 			}
 
 			const placeTiles = (tiles, cols) => {
@@ -189,8 +195,12 @@
 					.sort((a, b) => Number(a.position || 0) - Number(b.position || 0))
 
 				const updateColumns = () => {
-					const cols = computeColumnCount(gridEl.clientWidth)
+					const style = getComputedStyle(gridEl)
+					const spacing = Number.parseFloat(style.columnGap || style.gap || "14") || 14
+					const cols = computeColumnCount(gridEl.clientWidth, spacing)
 					gridEl.style.setProperty("--cols", String(cols))
+					const cell = Math.max(0, Math.floor((gridEl.clientWidth - spacing * (cols - 1)) / cols))
+					gridEl.style.setProperty("--row", `${cell}px`)
 					const placements = placeTiles(tiles, cols)
 					for (const p of placements) {
 						const el = gridEl.querySelector(`[data-tile-id="${p.id}"]`)
