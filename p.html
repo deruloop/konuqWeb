@@ -310,14 +310,29 @@
 				const blocks = note.blocks || []
 				const title = blocks.find((b) => b.type === "TITLE" && b.markdown && String(b.markdown).trim())
 				if (title) return String(title.markdown).trim()
-				const firstText = blocks.find((b) => b.markdown && String(b.markdown).trim())
-				return firstText ? String(firstText.markdown).trim().slice(0, 40) : "Untitled"
+				for (const b of blocks) {
+					if (b.type === "STOP") {
+						const s = parseStopBlock(b)
+						if (s && (s.title || s.address)) return String(s.title || s.address).slice(0, 40)
+					} else if (b.markdown && String(b.markdown).trim()) {
+						return String(b.markdown).trim().slice(0, 40)
+					}
+				}
+				return "Untitled"
 			}
 
 			const notePreviewFromBlocks = (note) => {
 				const blocks = (note.blocks || []).filter((b) => b.type !== "TITLE")
-				const text = blocks.find((b) => b.markdown && String(b.markdown).trim())
-				return text ? String(text.markdown).trim() : ""
+				for (const b of blocks) {
+					if (b.type === "STOP") {
+						const s = parseStopBlock(b)
+						const txt = s ? [s.title, s.address].filter(Boolean).join(" — ") : ""
+						if (txt) return txt
+					} else if (b.markdown && String(b.markdown).trim()) {
+						return String(b.markdown).trim()
+					}
+				}
+				return ""
 			}
 
 			const openOverlay = () => overlayEl.classList.add("open")
@@ -422,6 +437,92 @@
 				}
 			}
 
+			const parseStopBlock = (b) => {
+				if (!b || b.type !== "STOP" || !b.markdown) return null
+				try {
+					const o = JSON.parse(b.markdown)
+					if (!o || typeof o !== "object") return null
+					const title = o.title ? String(o.title).trim() : ""
+					const address = o.address ? String(o.address).trim() : ""
+					if (!title && !address) return null
+					const lat = Number(o.lat)
+					const lng = Number(o.lng)
+					const hasCoords = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)
+					const startMs = Number(o.startDateMs)
+					const dur = Number(o.durationMinutes)
+					return {
+						title,
+						address,
+						lat: hasCoords ? lat : null,
+						lng: hasCoords ? lng : null,
+						startDateMs: Number.isFinite(startMs) && startMs > 0 ? startMs : null,
+						durationMinutes: Number.isFinite(dur) && dur > 0 ? dur : null
+					}
+				} catch {
+					return null
+				}
+			}
+
+			const formatStopWhen = (stop) => {
+				const parts = []
+				if (stop.startDateMs) {
+					try {
+						parts.push(new Date(stop.startDateMs).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }))
+					} catch {}
+				}
+				if (stop.durationMinutes) {
+					const h = Math.floor(stop.durationMinutes / 60)
+					const m = stop.durationMinutes % 60
+					parts.push(h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m`)
+				}
+				return parts.join(" · ")
+			}
+
+			const renderStopCard = (stop) => {
+				const card = document.createElement("div")
+				card.className = "stopCard"
+
+				const head = document.createElement("div")
+				head.className = "stopHead"
+				const pin = document.createElement("div")
+				pin.className = "stopPin"
+				pin.textContent = "📍"
+				const titleWrap = document.createElement("div")
+				titleWrap.className = "stopTitleWrap"
+				const t = document.createElement("div")
+				t.className = "stopTitle"
+				t.textContent = stop.title || stop.address || "Stop"
+				titleWrap.appendChild(t)
+				if (stop.address && stop.title) {
+					const a = document.createElement("div")
+					a.className = "stopAddress"
+					a.textContent = stop.address
+					titleWrap.appendChild(a)
+				}
+				head.appendChild(pin)
+				head.appendChild(titleWrap)
+				card.appendChild(head)
+
+				const when = formatStopWhen(stop)
+				if (when) {
+					const w = document.createElement("div")
+					w.className = "stopWhen"
+					w.textContent = when
+					card.appendChild(w)
+				}
+
+				if (stop.lat != null && stop.lng != null) {
+					const link = document.createElement("a")
+					link.className = "stopMapLink"
+					link.href = `https://maps.apple.com/?ll=${stop.lat},${stop.lng}&q=${encodeURIComponent(stop.title || stop.address || "Stop")}`
+					link.target = "_blank"
+					link.rel = "noopener noreferrer"
+					link.textContent = "View on map ↗"
+					card.appendChild(link)
+				}
+				return card
+			}
+
 			const openNote = (noteUuid) => {
 				const payload = state.payload
 				if (!payload) return
@@ -459,6 +560,14 @@
 						d.textContent = "Video not available on web"
 						reader.appendChild(d)
 						continue
+					}
+
+					if (b.type === "STOP") {
+						const stop = parseStopBlock(b)
+						if (stop) {
+							reader.appendChild(renderStopCard(stop))
+							continue
+						}
 					}
 
 					const div = document.createElement("div")
