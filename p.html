@@ -412,7 +412,6 @@
 				showDetail()
 				setBackLink({}, "← All collections")
 				const title = `${collection.emoji || "📌"} ${collection.title || ""}`.trim()
-				hubTitleEl.textContent = title
 				detailTitleEl.textContent = title
 				const tags = (collection.tags || []).map(normalizedTagKey).filter(Boolean).map((t) => `#${t}`)
 				detailMetaEl.textContent = tags.join("  ")
@@ -672,7 +671,6 @@
 				setBackLink(backTarget, backLabel)
 
 				const noteTitle = noteTitleFromBlocks(note)
-				hubTitleEl.textContent = noteTitle
 				document.title = `${noteTitle} · Konuq`
 				// The note's own TITLE block acts as the heading, so hide the detail head.
 				const headEl = detailEl.querySelector(".detailHead")
@@ -760,7 +758,8 @@
 						return
 					}
 					state.payload = payload
-					statusPillEl.textContent = "Ready"
+					hubTitleEl.textContent = payload?.hub?.title || "Konuq Hub"
+					statusPillEl.textContent = "Public"
 					renderRoute({ collectionId: route.collectionId, noteUuid: route.noteUuid })
 				} catch {
 					renderEmpty("Load failed", "Unable to fetch the published hub.")
