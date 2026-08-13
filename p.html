@@ -13,7 +13,10 @@
 		<div class="wrap">
 			<div class="topbar">
 				<div class="brand">
-					<a id="backLink" class="backLink" href="#" style="display:none">← Back</a>
+					<div id="navBar" class="navBar" style="display:none">
+						<a id="backLink" class="backLink" href="#" style="display:none">← Back</a>
+						<a id="homeLink" class="backLink" href="#" style="display:none">Home</a>
+					</div>
 					<div class="kicker">Konuq</div>
 					<h1 id="hubTitle">Loading…</h1>
 				</div>
@@ -52,6 +55,8 @@
 			const detailMetaEl = document.getElementById("detailMeta")
 			const detailBodyEl = document.getElementById("detailBody")
 			const backLinkEl = document.getElementById("backLink")
+			const homeLinkEl = document.getElementById("homeLink")
+			const navBarEl = document.getElementById("navBar")
 
 			const state = {
 				payload: null,
@@ -365,19 +370,31 @@
 				renderRoute(t)
 			}
 
-			const setBackLink = (target, label) => {
-				if (!target) {
+			// Configure the header nav: an optional "back" button and an optional
+			// "Home" button (Home always jumps to the hub grid).
+			const setNav = ({ back = null, home = false } = {}) => {
+				let anyShown = false
+				if (back) {
+					backLinkEl.style.display = "inline-flex"
+					backLinkEl.textContent = back.label || "← Back"
+					backLinkEl.href = buildRouteURL(back.target)
+					backLinkEl.onclick = (e) => { e.preventDefault(); navigate(back.target) }
+					anyShown = true
+				} else {
 					backLinkEl.style.display = "none"
 					backLinkEl.onclick = null
-					return
 				}
-				backLinkEl.style.display = "inline-flex"
-				backLinkEl.textContent = label || "← Back"
-				backLinkEl.href = buildRouteURL(target)
-				backLinkEl.onclick = (e) => {
-					e.preventDefault()
-					navigate(target)
+				if (home) {
+					homeLinkEl.style.display = "inline-flex"
+					homeLinkEl.textContent = "Home"
+					homeLinkEl.href = buildRouteURL({})
+					homeLinkEl.onclick = (e) => { e.preventDefault(); navigate({}) }
+					anyShown = true
+				} else {
+					homeLinkEl.style.display = "none"
+					homeLinkEl.onclick = null
 				}
+				navBarEl.style.display = anyShown ? "flex" : "none"
 			}
 
 			const showHub = () => {
@@ -394,8 +411,9 @@
 			let gridBuilt = false
 			const renderHubView = () => {
 				const payload = state.payload
-				setBackLink(null)
+				setNav({})
 				showHub()
+				hubTitleEl.style.display = ""
 				hubTitleEl.textContent = payload?.hub?.title || "Konuq Hub"
 				statusPillEl.textContent = "Public"
 				document.title = payload?.hub?.title ? `${payload.hub.title} · Konuq` : "Konuq Hub"
@@ -410,7 +428,8 @@
 				state.selectedCollectionId = collectionId
 				state.selectedNoteUuid = null
 				showDetail()
-				setBackLink({}, "← All collections")
+				setNav({ home: true })
+				hubTitleEl.style.display = "none"
 				const title = `${collection.emoji || "📌"} ${collection.title || ""}`.trim()
 				detailTitleEl.textContent = title
 				const tags = (collection.tags || []).map(normalizedTagKey).filter(Boolean).map((t) => `#${t}`)
@@ -665,10 +684,13 @@
 				state.selectedCollectionId = fromCollectionId || null
 				state.selectedNoteUuid = noteUuid
 				showDetail()
+				hubTitleEl.style.display = "none"
 
-				const backTarget = fromCollectionId ? { collectionId: fromCollectionId } : {}
-				const backLabel = fromCollectionId ? "← Back to collection" : "← All collections"
-				setBackLink(backTarget, backLabel)
+				if (fromCollectionId) {
+					setNav({ back: { target: { collectionId: fromCollectionId }, label: "← Back to collection" }, home: true })
+				} else {
+					setNav({ home: true })
+				}
 
 				const noteTitle = noteTitleFromBlocks(note)
 				document.title = `${noteTitle} · Konuq`
