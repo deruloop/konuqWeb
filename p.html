@@ -13,6 +13,7 @@
 		<div class="wrap">
 			<div class="topbar">
 				<div class="brand">
+					<a id="backLink" class="backLink" href="#" style="display:none">← Back</a>
 					<div class="kicker">Konuq</div>
 					<h1 id="hubTitle">Loading…</h1>
 				</div>
@@ -24,25 +25,17 @@
 			<div id="grid" class="grid" style="opacity:0;transform:translateY(4px);transition:opacity .22s ease, transform .22s ease"></div>
 			<div id="empty" class="empty" style="display:none"></div>
 
+			<div id="detail" class="detail" style="display:none">
+				<div class="detailHead">
+					<h2 id="detailTitle"></h2>
+					<div class="meta" id="detailMeta"></div>
+				</div>
+				<div id="detailBody" class="detailBody"></div>
+			</div>
+
 			<div class="footer">
 				<span>Made with</span>
 				<a class="footerLink" href="https://apps.apple.com/app/id0000000000" target="_blank" rel="noopener noreferrer">Konuq</a>
-			</div>
-		</div>
-
-		<div id="overlay" class="modalOverlay" role="dialog" aria-modal="true">
-			<div class="sheet">
-				<div class="sheetHeader">
-					<div>
-						<h3 id="sheetTitle"></h3>
-						<div class="meta" id="sheetMeta"></div>
-					</div>
-					<div class="sheetHeaderActions">
-						<button class="btn" id="backBtn" type="button" style="display:none">Back</button>
-						<button class="btn" id="closeBtn" type="button">Close</button>
-					</div>
-				</div>
-				<div class="sheetBody" id="sheetBody"></div>
 			</div>
 		</div>
 
@@ -54,12 +47,11 @@
 			const statusPillEl = document.getElementById("statusPill")
 			const gridEl = document.getElementById("grid")
 			const emptyEl = document.getElementById("empty")
-			const overlayEl = document.getElementById("overlay")
-			const sheetTitleEl = document.getElementById("sheetTitle")
-			const sheetMetaEl = document.getElementById("sheetMeta")
-			const sheetBodyEl = document.getElementById("sheetBody")
-			const backBtnEl = document.getElementById("backBtn")
-			const closeBtnEl = document.getElementById("closeBtn")
+			const detailEl = document.getElementById("detail")
+			const detailTitleEl = document.getElementById("detailTitle")
+			const detailMetaEl = document.getElementById("detailMeta")
+			const detailBodyEl = document.getElementById("detailBody")
+			const backLinkEl = document.getElementById("backLink")
 
 			const state = {
 				payload: null,
@@ -71,14 +63,6 @@
 			const normalizedTagKey = (raw) => {
 				if (!raw) return ""
 				return String(raw).trim().replace(/^#/, "").toLowerCase()
-			}
-
-			const getShareIdFromPath = () => {
-				const parts = window.location.pathname.split("/").filter(Boolean)
-				const pIndex = parts.indexOf("p")
-				if (pIndex !== -1) return parts[pIndex + 1] || null
-				const params = new URLSearchParams(window.location.search)
-				return params.get("shareId") || null
 			}
 
 			const storagePublicURL = (shareId, path) => {
@@ -264,7 +248,7 @@
 					}
 					tile.appendChild(content)
 
-					tile.addEventListener("click", () => openCollection(c.id))
+					tile.addEventListener("click", () => navigate({ collectionId: c.id }))
 					gridEl.appendChild(tile)
 
 					if (is1x1) {
@@ -309,13 +293,13 @@
 			const noteTitleFromBlocks = (note) => {
 				const blocks = note.blocks || []
 				const title = blocks.find((b) => b.type === "TITLE" && b.markdown && String(b.markdown).trim())
-				if (title) return String(title.markdown).trim()
+				if (title) return mdToPlainText(title.markdown)
 				for (const b of blocks) {
 					if (b.type === "STOP") {
 						const s = parseStopBlock(b)
 						if (s && (s.title || s.address)) return String(s.title || s.address).slice(0, 40)
 					} else if (b.markdown && String(b.markdown).trim()) {
-						return String(b.markdown).trim().slice(0, 40)
+						return mdToPlainText(b.markdown).slice(0, 40)
 					}
 				}
 				return "Untitled"
@@ -329,78 +313,125 @@
 						const txt = s ? [s.title, s.address].filter(Boolean).join(" — ") : ""
 						if (txt) return txt
 					} else if (b.markdown && String(b.markdown).trim()) {
-						return String(b.markdown).trim()
+						return mdToPlainText(b.markdown)
 					}
 				}
 				return ""
 			}
 
-			const openOverlay = () => overlayEl.classList.add("open")
-			const closeOverlay = () => {
-				overlayEl.classList.remove("open")
-				state.selectedCollectionId = null
-				state.selectedNoteUuid = null
-				sheetBodyEl.innerHTML = ""
+			// ---- Client-side routing: each view has its own URL, no modal ----
+			// Prod URLs are path-based (/p/<sid>/c/<cid>/n/<uuid>); local testing
+			// falls back to query params (?shareId=&c=&n=) since there's no rewrite.
+			const parseRoute = () => {
+				const parts = window.location.pathname.split("/").filter(Boolean)
+				const pIndex = parts.indexOf("p")
+				if (pIndex !== -1) {
+					const sid = parts[pIndex + 1] || null
+					const rest = parts.slice(pIndex + 2)
+					let collectionId = null, noteUuid = null
+					for (let i = 0; i < rest.length; i += 2) {
+						if (rest[i] === "c") collectionId = decodeURIComponent(rest[i + 1] || "")
+						else if (rest[i] === "n") noteUuid = decodeURIComponent(rest[i + 1] || "")
+					}
+					return { shareId: sid, collectionId: collectionId || null, noteUuid: noteUuid || null }
+				}
+				const params = new URLSearchParams(window.location.search)
+				return {
+					shareId: params.get("shareId"),
+					collectionId: params.get("c") || null,
+					noteUuid: params.get("n") || null
+				}
 			}
 
-			let lockedScrollY = 0
-			const lockBodyScroll = () => {
-				if (document.body.classList.contains("modalOpen")) return
-				lockedScrollY = window.scrollY || 0
-				document.body.classList.add("modalOpen")
-				document.body.style.position = "fixed"
-				document.body.style.top = `-${lockedScrollY}px`
-				document.body.style.left = "0"
-				document.body.style.right = "0"
-				document.body.style.width = "100%"
+			const buildRouteURL = ({ collectionId = null, noteUuid = null } = {}) => {
+				const sid = state.shareId
+				const parts = window.location.pathname.split("/").filter(Boolean)
+				if (parts.indexOf("p") !== -1) {
+					let path = `/p/${encodeURIComponent(sid)}`
+					if (collectionId) path += `/c/${encodeURIComponent(collectionId)}`
+					if (noteUuid) path += `/n/${encodeURIComponent(noteUuid)}`
+					return path
+				}
+				const q = new URLSearchParams()
+				q.set("shareId", sid)
+				if (collectionId) q.set("c", collectionId)
+				if (noteUuid) q.set("n", noteUuid)
+				return `${window.location.pathname}?${q.toString()}`
 			}
 
-			const unlockBodyScroll = () => {
-				document.body.classList.remove("modalOpen")
-				document.body.style.position = ""
-				document.body.style.top = ""
-				document.body.style.left = ""
-				document.body.style.right = ""
-				document.body.style.width = ""
-				window.scrollTo(0, lockedScrollY)
+			const navigate = (target, { push = true } = {}) => {
+				const t = { collectionId: target.collectionId || null, noteUuid: target.noteUuid || null }
+				if (push) history.pushState(t, "", buildRouteURL(t))
+				renderRoute(t)
 			}
 
-			const openOverlayLocked = () => {
-				openOverlay()
-				lockBodyScroll()
+			const setBackLink = (target, label) => {
+				if (!target) {
+					backLinkEl.style.display = "none"
+					backLinkEl.onclick = null
+					return
+				}
+				backLinkEl.style.display = "inline-flex"
+				backLinkEl.textContent = label || "← Back"
+				backLinkEl.href = buildRouteURL(target)
+				backLinkEl.onclick = (e) => {
+					e.preventDefault()
+					navigate(target)
+				}
 			}
 
-			const closeOverlayLocked = () => {
-				closeOverlay()
-				unlockBodyScroll()
-				backBtnEl.style.display = "none"
+			const showHub = () => {
+				detailEl.style.display = "none"
+				emptyEl.style.display = "none"
+				gridEl.style.display = ""
+			}
+			const showDetail = () => {
+				gridEl.style.display = "none"
+				emptyEl.style.display = "none"
+				detailEl.style.display = "block"
 			}
 
-			const showBackButton = (shouldShow) => {
-				backBtnEl.style.display = shouldShow ? "inline-flex" : "none"
-			}
-
-			const openCollection = (collectionId) => {
+			let gridBuilt = false
+			const renderHubView = () => {
 				const payload = state.payload
-				if (!payload) return
-				const collection = (payload.collections || []).find((c) => c.id === collectionId)
-				if (!collection) return
+				setBackLink(null)
+				showHub()
+				hubTitleEl.textContent = payload?.hub?.title || "Konuq Hub"
+				statusPillEl.textContent = "Public"
+				document.title = payload?.hub?.title ? `${payload.hub.title} · Konuq` : "Konuq Hub"
+				if (!gridBuilt) { renderGrid(); gridBuilt = true }
+				window.scrollTo(0, 0)
+			}
+
+			const renderCollectionView = (collectionId) => {
+				const payload = state.payload
+				const collection = (payload?.collections || []).find((c) => c.id === collectionId)
+				if (!collection) { renderHubView(); return }
 				state.selectedCollectionId = collectionId
 				state.selectedNoteUuid = null
-				showBackButton(false)
-
-				sheetTitleEl.textContent = `${collection.emoji || "📌"} ${collection.title || ""}`.trim()
+				showDetail()
+				setBackLink({}, "← All collections")
+				const title = `${collection.emoji || "📌"} ${collection.title || ""}`.trim()
+				hubTitleEl.textContent = title
+				detailTitleEl.textContent = title
 				const tags = (collection.tags || []).map(normalizedTagKey).filter(Boolean).map((t) => `#${t}`)
-				sheetMetaEl.textContent = tags.join("  ")
-				sheetBodyEl.innerHTML = ""
+				detailMetaEl.textContent = tags.join("  ")
+				document.title = `${collection.title || "Collection"} · Konuq`
+				detailBodyEl.innerHTML = ""
 
 				const notes = notesForCollection(collection)
 				if (!notes.length) {
 					const empty = document.createElement("div")
 					empty.className = "empty"
-					empty.innerHTML = "<strong>No notes</strong><div style='margin-top:10px'>This collection has no matching notes in the published hub.</div>"
-					sheetBodyEl.appendChild(empty)
-					openOverlayLocked()
+					const strong = document.createElement("strong")
+					strong.textContent = "No notes"
+					const d = document.createElement("div")
+					d.style.marginTop = "10px"
+					d.textContent = "This collection has no matching notes in the published hub."
+					empty.appendChild(strong)
+					empty.appendChild(d)
+					detailBodyEl.appendChild(empty)
+					window.scrollTo(0, 0)
 					return
 				}
 
@@ -417,11 +448,11 @@
 					p.textContent = notePreviewFromBlocks(n)
 					card.appendChild(h)
 					card.appendChild(p)
-					card.addEventListener("click", () => openNote(n.uuid))
+					card.addEventListener("click", () => navigate({ collectionId, noteUuid: n.uuid }))
 					cards.appendChild(card)
 				}
-				sheetBodyEl.appendChild(cards)
-				openOverlayLocked()
+				detailBodyEl.appendChild(cards)
+				window.scrollTo(0, 0)
 			}
 
 			const blockClass = (type) => {
@@ -436,6 +467,107 @@
 					default: return "block"
 				}
 			}
+
+			// Safe inline markdown → DOM. Builds text nodes / elements only
+			// (never innerHTML), so user content can't inject markup.
+			const INLINE_SAFE_SCHEME = /^(https?:|mailto:)/i
+			const renderInlineMarkdown = (text) => {
+				const frag = document.createDocumentFragment()
+				let src = String(text ?? "")
+				// Order matters: code and bold before italic so ** and ` win.
+				const re = /(`[^`]+`)|(\*\*[\s\S]+?\*\*)|(~~[\s\S]+?~~)|(\*[^*\s][\s\S]*?\*)|(\[[^\]]*\]\([^)\s]+\))/
+				let m
+				while ((m = re.exec(src))) {
+					const idx = m.index
+					if (idx > 0) frag.appendChild(document.createTextNode(src.slice(0, idx)))
+					const tok = m[0]
+					if (m[1]) {
+						const code = document.createElement("code")
+						code.className = "mdCode"
+						code.textContent = tok.slice(1, -1)
+						frag.appendChild(code)
+					} else if (m[2]) {
+						const el = document.createElement("strong")
+						el.appendChild(renderInlineMarkdown(tok.slice(2, -2)))
+						frag.appendChild(el)
+					} else if (m[3]) {
+						const el = document.createElement("del")
+						el.appendChild(renderInlineMarkdown(tok.slice(2, -2)))
+						frag.appendChild(el)
+					} else if (m[4]) {
+						const el = document.createElement("em")
+						el.appendChild(renderInlineMarkdown(tok.slice(1, -1)))
+						frag.appendChild(el)
+					} else if (m[5]) {
+						const inner = tok.match(/^\[([^\]]*)\]\(([^)\s]+)\)$/)
+						const label = inner ? inner[1] : tok
+						const url = inner ? inner[2] : ""
+						if (url && INLINE_SAFE_SCHEME.test(url)) {
+							const a = document.createElement("a")
+							a.className = "mdLink"
+							a.href = url
+							a.target = "_blank"
+							a.rel = "noopener noreferrer"
+							a.appendChild(renderInlineMarkdown(label))
+							frag.appendChild(a)
+						} else {
+							// Internal (konuq://) or unknown scheme: show the label text only.
+							frag.appendChild(renderInlineMarkdown(label))
+						}
+					}
+					src = src.slice(idx + tok.length)
+				}
+				if (src) frag.appendChild(document.createTextNode(src))
+				return frag
+			}
+
+			const isDividerLine = (line) => /^\s*([-*_])\1{2,}\s*$/.test(line)
+			const bulletMatch = (line) => line.match(/^\s*[-*]\s+(.*)$/)
+
+			// Renders a block's markdown into `container`: dividers → <hr>,
+			// "- " lines → bullet lists, everything else inline + line breaks.
+			const renderBlockMarkdown = (container, markdown) => {
+				const lines = String(markdown ?? "").split(/\r?\n/)
+				let list = null
+				let needBreak = false
+				const closeList = () => { if (list) { container.appendChild(list); list = null } }
+				for (const line of lines) {
+					if (isDividerLine(line)) {
+						closeList()
+						const hr = document.createElement("hr")
+						hr.className = "divider"
+						container.appendChild(hr)
+						needBreak = false
+						continue
+					}
+					const bm = bulletMatch(line)
+					if (bm) {
+						if (!list) { list = document.createElement("ul"); list.className = "mdList" }
+						const li = document.createElement("li")
+						li.appendChild(renderInlineMarkdown(bm[1]))
+						list.appendChild(li)
+						needBreak = false
+						continue
+					}
+					closeList()
+					if (needBreak) container.appendChild(document.createElement("br"))
+					container.appendChild(renderInlineMarkdown(line))
+					needBreak = true
+				}
+				closeList()
+			}
+
+			// Flatten markdown to plain text for titles / previews.
+			const mdToPlainText = (s) => String(s ?? "")
+				.replace(/`([^`]+)`/g, "$1")
+				.replace(/\*\*([\s\S]+?)\*\*/g, "$1")
+				.replace(/~~([\s\S]+?)~~/g, "$1")
+				.replace(/\*([^*\s][\s\S]*?)\*/g, "$1")
+				.replace(/\[([^\]]*)\]\([^)\s]+\)/g, "$1")
+				.replace(/^\s*[-*_]{3,}\s*$/gm, "")
+				.replace(/^\s*[-*]\s+/gm, "")
+				.replace(/\s+/g, " ")
+				.trim()
 
 			const parseStopBlock = (b) => {
 				if (!b || b.type !== "STOP" || !b.markdown) return null
@@ -523,17 +655,29 @@
 				return card
 			}
 
-			const openNote = (noteUuid) => {
+			const renderNoteView = (noteUuid, fromCollectionId) => {
 				const payload = state.payload
-				if (!payload) return
-				const note = (payload.notes || []).find((n) => n.uuid === noteUuid)
-				if (!note) return
+				const note = (payload?.notes || []).find((n) => n.uuid === noteUuid)
+				if (!note) {
+					if (fromCollectionId) { renderCollectionView(fromCollectionId); return }
+					renderHubView()
+					return
+				}
+				state.selectedCollectionId = fromCollectionId || null
 				state.selectedNoteUuid = noteUuid
-				showBackButton(!!state.selectedCollectionId)
+				showDetail()
 
-				sheetTitleEl.textContent = "Note"
-				sheetMetaEl.textContent = ""
-				sheetBodyEl.innerHTML = ""
+				const backTarget = fromCollectionId ? { collectionId: fromCollectionId } : {}
+				const backLabel = fromCollectionId ? "← Back to collection" : "← All collections"
+				setBackLink(backTarget, backLabel)
+
+				const noteTitle = noteTitleFromBlocks(note)
+				hubTitleEl.textContent = noteTitle
+				document.title = `${noteTitle} · Konuq`
+				// The note's own TITLE block acts as the heading, so hide the detail head.
+				const headEl = detailEl.querySelector(".detailHead")
+				if (headEl) headEl.style.display = "none"
+				detailBodyEl.innerHTML = ""
 
 				const reader = document.createElement("div")
 				reader.className = "reader"
@@ -572,35 +716,31 @@
 
 					const div = document.createElement("div")
 					div.className = blockClass(b.type)
-					div.textContent = b.markdown || ""
+					renderBlockMarkdown(div, b.markdown || "")
 					reader.appendChild(div)
 				}
 
-				sheetBodyEl.appendChild(reader)
-				openOverlayLocked()
+				detailBodyEl.appendChild(reader)
+				window.scrollTo(0, 0)
 			}
 
-			backBtnEl.addEventListener("click", () => {
-				if (state.selectedCollectionId) openCollection(state.selectedCollectionId)
-			})
-			closeBtnEl.addEventListener("click", () => closeOverlayLocked())
-			overlayEl.addEventListener("click", (e) => {
-				if (e.target === overlayEl) closeOverlayLocked()
-			})
-			window.addEventListener("keydown", (e) => {
-				if (e.key === "Escape") closeOverlayLocked()
-			})
-
-			const stopBackgroundScroll = (e) => {
-				if (!overlayEl.classList.contains("open")) return
-				if (sheetBodyEl.contains(e.target)) return
-				e.preventDefault()
+			const renderRoute = ({ collectionId = null, noteUuid = null } = {}) => {
+				if (!state.payload) return
+				// The detail head is hidden for notes; restore it for other views.
+				const headEl = detailEl.querySelector(".detailHead")
+				if (headEl) headEl.style.display = ""
+				if (noteUuid) { renderNoteView(noteUuid, collectionId); return }
+				if (collectionId) { renderCollectionView(collectionId); return }
+				renderHubView()
 			}
-			overlayEl.addEventListener("wheel", stopBackgroundScroll, { passive: false })
-			overlayEl.addEventListener("touchmove", stopBackgroundScroll, { passive: false })
+
+			window.addEventListener("popstate", (e) => {
+				renderRoute(e.state || parseRoute())
+			})
 
 			const load = async () => {
-				const shareId = getShareIdFromPath()
+				const route = parseRoute()
+				const shareId = route.shareId
 				if (!shareId) {
 					renderEmpty("Missing link", "No shareId found in URL.")
 					return
@@ -620,9 +760,8 @@
 						return
 					}
 					state.payload = payload
-					document.title = payload?.hub?.title ? `${payload.hub.title} · Konuq` : "Konuq Hub"
-					renderGrid()
 					statusPillEl.textContent = "Ready"
+					renderRoute({ collectionId: route.collectionId, noteUuid: route.noteUuid })
 				} catch {
 					renderEmpty("Load failed", "Unable to fetch the published hub.")
 				}
