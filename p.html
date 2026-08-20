@@ -670,6 +670,13 @@
 
 			// Renders a block's markdown into `container`: dividers → <hr>,
 			// "- " lines → bullet lists, everything else inline + line breaks.
+			// "[ ] text" / "[x] text" (optionally "- [ ] text") → interactive checkbox row.
+			const checkboxMatch = (line) => {
+				const m = /^\s*(?:[-*]\s+)?\[( |x|X)\]\s?(.*)$/.exec(line)
+				if (!m) return null
+				return { checked: m[1].toLowerCase() === "x", text: m[2] }
+			}
+
 			const renderBlockMarkdown = (container, markdown) => {
 				const lines = String(markdown ?? "").split(/\r?\n/)
 				let list = null
@@ -681,6 +688,34 @@
 						const hr = document.createElement("hr")
 						hr.className = "divider"
 						container.appendChild(hr)
+						needBreak = false
+						continue
+					}
+					const cm = checkboxMatch(line)
+					if (cm) {
+						closeList()
+						const row = document.createElement("div")
+						row.className = "mdCheck" + (cm.checked ? " checked" : "")
+						const box = document.createElement("span")
+						box.className = "mdCheckBox"
+						box.setAttribute("role", "checkbox")
+						box.setAttribute("aria-checked", cm.checked ? "true" : "false")
+						box.setAttribute("tabindex", "0")
+						const label = document.createElement("span")
+						label.className = "mdCheckLabel"
+						label.appendChild(renderInlineMarkdown(cm.text))
+						row.appendChild(box)
+						row.appendChild(label)
+						// Read-only site: toggling is local eye-candy, nothing persists.
+						const toggle = () => {
+							row.classList.toggle("checked")
+							box.setAttribute("aria-checked", row.classList.contains("checked") ? "true" : "false")
+						}
+						row.addEventListener("click", toggle)
+						box.addEventListener("keydown", (e) => {
+							if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle() }
+						})
+						container.appendChild(row)
 						needBreak = false
 						continue
 					}
@@ -703,6 +738,8 @@
 
 			// Flatten markdown to plain text for titles / previews.
 			const mdToPlainText = (s) => String(s ?? "")
+				.replace(/^\s*(?:[-*]\s+)?\[ \]\s?/gm, "☐ ")
+				.replace(/^\s*(?:[-*]\s+)?\[[xX]\]\s?/gm, "☑︎ ")
 				.replace(/`([^`]+)`/g, "$1")
 				.replace(/\*\*([\s\S]+?)\*\*/g, "$1")
 				.replace(/~~([\s\S]+?)~~/g, "$1")
