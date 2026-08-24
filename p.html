@@ -615,6 +615,22 @@
 			// Safe inline markdown → DOM. Builds text nodes / elements only
 			// (never innerHTML), so user content can't inject markup.
 			const INLINE_SAFE_SCHEME = /^(https?:|mailto:)/i
+			const INTERNAL_NOTE_SCHEME = /^konuq:\/\/note\//i
+
+			// Internal note links ("konuq://note/<uuid>") become in-page navigation:
+			// find the published collection that gathers the note, so the reader lands
+			// on the same route as clicking it from the grid. Notes that aren't part of
+			// any published collection stay plain text.
+			const routeForNoteUuid = (uuid) => {
+				const payload = state.payload
+				if (!payload || !uuid) return null
+				for (const collection of payload.collections || []) {
+					if (notesForCollection(collection).some((n) => n.uuid === uuid)) {
+						return { collectionId: collection.id, noteUuid: uuid }
+					}
+				}
+				return null
+			}
 			const renderInlineMarkdown = (text) => {
 				const frag = document.createDocumentFragment()
 				let src = String(text ?? "")
@@ -654,8 +670,25 @@
 							a.rel = "noopener noreferrer"
 							a.appendChild(renderInlineMarkdown(label))
 							frag.appendChild(a)
+						} else if (url && INTERNAL_NOTE_SCHEME.test(url)) {
+							const uuid = url.replace(INTERNAL_NOTE_SCHEME, "").replace(/\/+$/, "")
+							const target = routeForNoteUuid(uuid)
+							if (target) {
+								const a = document.createElement("a")
+								a.className = "mdLink"
+								a.href = buildRouteURL(target)
+								a.appendChild(renderInlineMarkdown(label))
+								a.addEventListener("click", (event) => {
+									event.preventDefault()
+									navigate(target)
+								})
+								frag.appendChild(a)
+							} else {
+								// Note not published in any collection here: label only.
+								frag.appendChild(renderInlineMarkdown(label))
+							}
 						} else {
-							// Internal (konuq://) or unknown scheme: show the label text only.
+							// Unknown scheme: show the label text only.
 							frag.appendChild(renderInlineMarkdown(label))
 						}
 					}
