@@ -293,11 +293,11 @@ a{color:inherit;text-decoration:none}
 
 .tile:not(.noImage) .tileTitle h2{
 	color:#fff;
-	text-shadow:0 1px 3px rgba(0,0,0,.55), 0 0 2px rgba(0,0,0,.45);
+	text-shadow:0 1px 4px rgba(0,0,0,.65), 0 0 3px rgba(0,0,0,.5);
 }
 
 .tile:not(.noImage) .tileCount{
-	text-shadow:0 1px 3px rgba(0,0,0,.5);
+	text-shadow:0 1px 4px rgba(0,0,0,.6);
 }
 
 .footer{
