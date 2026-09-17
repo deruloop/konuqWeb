@@ -608,8 +608,20 @@
 					case "HEADING5": return "block h5"
 					case "HEADING6": return "block h6"
 					case "CODE": return "block code"
+					case "LIST_BULLET": return "block bullet"
+					case "TOGGLE":
+					case "TOGGLE_HEADER": return "block toggle"
+					case "CHECKBOX": return "block checkbox"
 					default: return "block"
 				}
+			}
+
+			// The editor keeps the "[ ] " / "[x] " prefix inside a checkbox block's
+			// text, but older rows can lack it: treat those as unchecked.
+			const blockMarkdown = (b) => {
+				const md = String(b.markdown ?? "")
+				if (b.type === "CHECKBOX" && !checkboxMatch(md.split(/\r?\n/)[0] || "")) return "[ ] " + md
+				return md
 			}
 
 			// Safe inline markdown → DOM. Builds text nodes / elements only
@@ -631,7 +643,62 @@
 				}
 				return null
 			}
-			const renderInlineMarkdown = (text) => {
+			// Bare URLs / emails in plain text become links, mirroring the editor's
+			// auto-link rules (email, explicit scheme, bare domain). Blocks written by
+			// the share extension hold the raw URL with no [label](url) around it.
+			const AUTO_LINK_RE = (() => {
+				const label = "[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?"
+				const domain = `${label}(?:\\.${label})*\\.[A-Za-z]{2,}`
+				const email = `[A-Za-z0-9._%+-]+@${domain}`
+				const schemeUrl = "[A-Za-z][A-Za-z0-9+.-]*://[^\\s<>\"]+"
+				const bareUrl = `(?:www\\.)?${domain}(?::\\d{2,5})?(?:/[^\\s<>\"]*)?`
+				return new RegExp(`(?<![A-Za-z0-9@])(?:${email}|${schemeUrl}|${bareUrl})`, "g")
+			})()
+			// Bare tokens that are far more likely filenames than domains ("README.md").
+			const NON_DOMAIN_FILE_EXTENSIONS = new Set([
+				"txt", "md", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "pages", "numbers",
+				"png", "jpg", "jpeg", "gif", "webp", "svg", "heic", "bmp", "tiff",
+				"zip", "rar", "tar", "gz", "dmg", "pkg", "exe",
+				"mp3", "mp4", "mov", "avi", "wav", "m4a",
+				"csv", "json", "xml", "yml", "yaml", "log", "env",
+				"swift", "kt", "java", "py", "rb", "php", "html", "css", "js", "ts"
+			])
+			const autoLinkURL = (token) => {
+				if (token.includes("://")) return token
+				if (token.includes("@")) return `mailto:${token}`
+				const host = token.split("/")[0]
+				const ext = host.split(".").pop().toLowerCase()
+				if (NON_DOMAIN_FILE_EXTENSIONS.has(ext)) return null
+				return `https://${token}`
+			}
+			const appendText = (frag, text, autoLink) => {
+				if (!text) return
+				if (!autoLink) { frag.appendChild(document.createTextNode(text)); return }
+				let last = 0
+				AUTO_LINK_RE.lastIndex = 0
+				let m
+				while ((m = AUTO_LINK_RE.exec(text))) {
+					let token = m[0]
+					// Trailing sentence punctuation is not part of the link.
+					while (token.length && ".,;:!?\"'".includes(token[token.length - 1])) token = token.slice(0, -1)
+					if (token.endsWith(")") && !token.includes("(")) token = token.slice(0, -1)
+					const url = token ? autoLinkURL(token) : null
+					if (!url || !INLINE_SAFE_SCHEME.test(url)) continue
+					if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)))
+					const a = document.createElement("a")
+					a.className = "mdLink"
+					a.href = url
+					a.target = "_blank"
+					a.rel = "noopener noreferrer"
+					a.textContent = token
+					frag.appendChild(a)
+					last = m.index + token.length
+					AUTO_LINK_RE.lastIndex = last
+				}
+				if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)))
+			}
+
+			const renderInlineMarkdown = (text, autoLink = true) => {
 				const frag = document.createDocumentFragment()
 				let src = String(text ?? "")
 				// Order matters: code and bold before italic so ** and ` win.
@@ -639,7 +706,7 @@
 				let m
 				while ((m = re.exec(src))) {
 					const idx = m.index
-					if (idx > 0) frag.appendChild(document.createTextNode(src.slice(0, idx)))
+					if (idx > 0) appendText(frag, src.slice(0, idx), autoLink)
 					const tok = m[0]
 					if (m[1]) {
 						const code = document.createElement("code")
@@ -648,15 +715,15 @@
 						frag.appendChild(code)
 					} else if (m[2]) {
 						const el = document.createElement("strong")
-						el.appendChild(renderInlineMarkdown(tok.slice(2, -2)))
+						el.appendChild(renderInlineMarkdown(tok.slice(2, -2), autoLink))
 						frag.appendChild(el)
 					} else if (m[3]) {
 						const el = document.createElement("del")
-						el.appendChild(renderInlineMarkdown(tok.slice(2, -2)))
+						el.appendChild(renderInlineMarkdown(tok.slice(2, -2), autoLink))
 						frag.appendChild(el)
 					} else if (m[4]) {
 						const el = document.createElement("em")
-						el.appendChild(renderInlineMarkdown(tok.slice(1, -1)))
+						el.appendChild(renderInlineMarkdown(tok.slice(1, -1), autoLink))
 						frag.appendChild(el)
 					} else if (m[5]) {
 						const inner = tok.match(/^\[([^\]]*)\]\(([^)\s]+)\)$/)
@@ -668,7 +735,7 @@
 							a.href = url
 							a.target = "_blank"
 							a.rel = "noopener noreferrer"
-							a.appendChild(renderInlineMarkdown(label))
+							a.appendChild(renderInlineMarkdown(label, false))
 							frag.appendChild(a)
 						} else if (url && INTERNAL_NOTE_SCHEME.test(url)) {
 							const uuid = url.replace(INTERNAL_NOTE_SCHEME, "").replace(/\/+$/, "")
@@ -677,7 +744,7 @@
 								const a = document.createElement("a")
 								a.className = "mdLink"
 								a.href = buildRouteURL(target)
-								a.appendChild(renderInlineMarkdown(label))
+								a.appendChild(renderInlineMarkdown(label, false))
 								a.addEventListener("click", (event) => {
 									event.preventDefault()
 									navigate(target)
@@ -694,7 +761,7 @@
 					}
 					src = src.slice(idx + tok.length)
 				}
-				if (src) frag.appendChild(document.createTextNode(src))
+				appendText(frag, src, autoLink)
 				return frag
 			}
 
@@ -705,9 +772,11 @@
 			// "- " lines → bullet lists, everything else inline + line breaks.
 			// "[ ] text" / "[x] text" (optionally "- [ ] text") → interactive checkbox row.
 			const checkboxMatch = (line) => {
-				const m = /^\s*(?:[-*]\s+)?\[( |x|X)\]\s?(.*)$/.exec(line)
+				// Older notes can carry the prefix inside a bold run ("**[ ] text**"):
+				// accept the opener and hand it back to the label so the bold still closes.
+				const m = /^\s*(?:[-*]\s+)?(\*\*|__)?\[( |x|X)\]\s?(.*)$/.exec(line)
 				if (!m) return null
-				return { checked: m[1].toLowerCase() === "x", text: m[2] }
+				return { checked: m[2].toLowerCase() === "x", text: (m[1] || "") + m[3] }
 			}
 
 			const renderBlockMarkdown = (container, markdown) => {
@@ -771,8 +840,8 @@
 
 			// Flatten markdown to plain text for titles / previews.
 			const mdToPlainText = (s) => String(s ?? "")
-				.replace(/^\s*(?:[-*]\s+)?\[ \]\s?/gm, "☐ ")
-				.replace(/^\s*(?:[-*]\s+)?\[[xX]\]\s?/gm, "☑︎ ")
+				.replace(/^\s*(?:[-*]\s+)?(\*\*|__)?\[ \]\s?/gm, "☐ $1")
+				.replace(/^\s*(?:[-*]\s+)?(\*\*|__)?\[[xX]\]\s?/gm, "☑︎ $1")
 				.replace(/`([^`]+)`/g, "$1")
 				.replace(/\*\*([\s\S]+?)\*\*/g, "$1")
 				.replace(/~~([\s\S]+?)~~/g, "$1")
