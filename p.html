@@ -599,6 +599,8 @@
 				window.scrollTo(0, 0)
 			}
 
+			// Mirrors the editor's type scale: TITLE is the H1, DESCRIPTION the H2
+			// (26pt bold, despite the name), then HEADING3..6.
 			const blockClass = (type) => {
 				switch (type) {
 					case "TITLE": return "block title"
@@ -1001,7 +1003,7 @@
 
 					const div = document.createElement("div")
 					div.className = blockClass(b.type)
-					renderBlockMarkdown(div, b.markdown || "")
+					renderBlockMarkdown(div, blockMarkdown(b))
 					reader.appendChild(div)
 				}
 
