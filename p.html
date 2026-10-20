@@ -322,7 +322,8 @@
 					if (b.type === "STOP") {
 						const s = parseStopBlock(b)
 						if (s && (s.title || s.address)) return String(s.title || s.address).slice(0, 40)
-					} else if (b.markdown && String(b.markdown).trim()) {
+					} else if (b.type !== "IMAGE" && b.type !== "VIDEO" && b.markdown && String(b.markdown).trim()) {
+						// Photo captions describe a photo, never the note.
 						return mdToPlainText(b.markdown).slice(0, 40)
 					}
 				}
@@ -969,22 +970,170 @@
 				const reader = document.createElement("div")
 				reader.className = "reader"
 
-				for (const b of (note.blocks || []).slice().sort((a, c) => Number(a.position || 0) - Number(c.position || 0))) {
-					if (b.type === "IMAGE" && b.mediaReference && String(b.mediaReference).startsWith("media:")) {
-						const url = resolveImageURL(b.mediaReference)
-						if (url) {
-							const media = document.createElement("div")
-							media.className = "media"
-							const img = document.createElement("img")
-							img.loading = "lazy"
-							img.decoding = "async"
-							img.src = url
-							img.alt = ""
-							media.appendChild(img)
-							reader.appendChild(media)
-							continue
+				// Image rows that follow each other are one carousel, exactly as the editor
+				// shows them: photos at the block's size, side by side on wide screens (one per
+				// 380px, three at most), a caption under each photo, one dot per scroll stop,
+				// and a tap opening the full-screen viewer that swipes through the same photos.
+				const isWebImage = (b) => b.type === "IMAGE" && b.mediaReference && String(b.mediaReference).startsWith("media:") && !!resolveImageURL(b.mediaReference)
+				const mediaHeight = (b) => {
+					const style = String(b.mediaStyle || "MEDIUM").toUpperCase()
+					return style === "SMALL" ? 140 : style === "LARGE" ? 320 : 220
+				}
+				const captionOf = (b) => String(b.markdown || "").trim()
+				const renderMediaPage = (b, index, onTap) => {
+					const page = document.createElement("figure")
+					page.className = "mediaPage"
+					const img = document.createElement("img")
+					img.loading = "lazy"
+					img.decoding = "async"
+					img.src = resolveImageURL(b.mediaReference)
+					img.style.height = `${mediaHeight(b)}px`
+					const caption = captionOf(b)
+					img.alt = caption ? mdToPlainText(caption) : ""
+					img.addEventListener("click", () => onTap(index))
+					page.appendChild(img)
+					const cap = document.createElement("figcaption")
+					cap.className = "mediaCaption"
+					if (caption) renderBlockMarkdown(cap, caption)
+					page.appendChild(cap)
+					return page
+				}
+				const openLightbox = (items, startIndex) => {
+					const box = document.createElement("div")
+					box.className = "lightbox"
+					const track = document.createElement("div")
+					track.className = "lightboxTrack"
+					for (const b of items) {
+						const page = document.createElement("figure")
+						page.className = "lightboxPage"
+						const img = document.createElement("img")
+						img.src = resolveImageURL(b.mediaReference)
+						img.decoding = "async"
+						const caption = captionOf(b)
+						img.alt = caption ? mdToPlainText(caption) : ""
+						page.appendChild(img)
+						if (caption) {
+							const cap = document.createElement("figcaption")
+							cap.className = "lightboxCaption"
+							renderBlockMarkdown(cap, caption)
+							page.appendChild(cap)
 						}
+						track.appendChild(page)
 					}
+					box.appendChild(track)
+					const close = document.createElement("button")
+					close.type = "button"
+					close.className = "lightboxClose"
+					close.setAttribute("aria-label", "Close")
+					close.textContent = "×"
+					box.appendChild(close)
+					let dotEls = []
+					if (items.length > 1) {
+						const dots = document.createElement("div")
+						dots.className = "galleryDots lightboxDots"
+						dotEls = items.map((_, i) => {
+							const dot = document.createElement("button")
+							dot.type = "button"
+							dot.className = "galleryDot" + (i === startIndex ? " on" : "")
+							dot.addEventListener("click", (e) => {
+								e.stopPropagation()
+								track.scrollTo({ left: track.clientWidth * i, behavior: "smooth" })
+							})
+							dots.appendChild(dot)
+							return dot
+						})
+						box.appendChild(dots)
+					}
+					const closeBox = () => {
+						document.removeEventListener("keydown", onKey)
+						box.remove()
+						document.body.style.overflow = ""
+					}
+					const onKey = (e) => {
+						if (e.key === "Escape") { e.preventDefault(); closeBox() }
+						// Handled here so the page's own scroll containers stay put.
+						if (e.key === "ArrowRight") { e.preventDefault(); track.scrollBy({ left: track.clientWidth, behavior: "smooth" }) }
+						if (e.key === "ArrowLeft") { e.preventDefault(); track.scrollBy({ left: -track.clientWidth, behavior: "smooth" }) }
+					}
+					document.addEventListener("keydown", onKey)
+					close.addEventListener("click", closeBox)
+					// A tap on the black (not on the photo or its caption) closes, like the app.
+					box.addEventListener("click", (e) => { if (e.target === box || e.target === track || e.target.classList.contains("lightboxPage")) closeBox() })
+					track.addEventListener("scroll", () => {
+						const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth))
+						dotEls.forEach((d, j) => d.classList.toggle("on", j === i))
+					}, { passive: true })
+					document.body.appendChild(box)
+					document.body.style.overflow = "hidden"
+					track.scrollTo({ left: track.clientWidth * startIndex })
+					// Keyboard focus moves into the viewer so arrows and Escape reach it first.
+					box.tabIndex = -1
+					box.focus({ preventScroll: true })
+				}
+				const renderGallery = (items) => {
+					const media = document.createElement("div")
+					media.className = items.length > 1 ? "media gallery" : "media"
+					const track = document.createElement("div")
+					track.className = "galleryTrack"
+					const onTap = (index) => openLightbox(items, index)
+					items.forEach((b, i) => track.appendChild(renderMediaPage(b, i, onTap)))
+					media.appendChild(track)
+					if (items.length <= 1) return media
+
+					// Same rule as the editor: one photo per 380px of width, three at most.
+					const columns = () => Math.max(1, Math.min(3, Math.floor(track.clientWidth / 380)))
+					let cols = 0
+					const applyColumns = () => {
+						const wanted = columns()
+						if (wanted === cols) return
+						cols = wanted
+						media.style.setProperty("--cols", String(cols))
+					}
+					const pageWidth = () => track.firstElementChild ? track.firstElementChild.getBoundingClientRect().width + 8 : track.clientWidth
+					const positions = () => Math.max(1, items.length - cols + 1)
+
+					const dots = document.createElement("div")
+					dots.className = "galleryDots"
+					const dotEls = items.map((_, i) => {
+						const dot = document.createElement("button")
+						dot.type = "button"
+						dot.className = "galleryDot" + (i === 0 ? " on" : "")
+						dot.setAttribute("aria-label", `Photo ${i + 1} of ${items.length}`)
+						dot.addEventListener("click", () => {
+							track.scrollTo({ left: pageWidth() * i, behavior: "smooth" })
+						})
+						dots.appendChild(dot)
+						return dot
+					})
+					const refreshDots = () => {
+						applyColumns()
+						const count = positions()
+						dots.style.display = count > 1 ? "" : "none"
+						const current = Math.min(count - 1, Math.round(track.scrollLeft / Math.max(1, pageWidth())))
+						dotEls.forEach((d, j) => {
+							d.style.display = j < count ? "" : "none"
+							d.classList.toggle("on", j === current)
+						})
+					}
+					track.addEventListener("scroll", refreshDots, { passive: true })
+					window.addEventListener("resize", refreshDots)
+					requestAnimationFrame(refreshDots)
+					media.appendChild(dots)
+					return media
+				}
+
+				const orderedBlocks = (note.blocks || []).slice().sort((a, c) => Number(a.position || 0) - Number(c.position || 0))
+				let pendingGallery = []
+				const flushGallery = () => {
+					if (pendingGallery.length) reader.appendChild(renderGallery(pendingGallery))
+					pendingGallery = []
+				}
+				for (const b of orderedBlocks) {
+					if (isWebImage(b)) {
+						pendingGallery.push(b)
+						continue
+					}
+					flushGallery()
 					if (b.type === "VIDEO" || (b.mediaReference && String(b.mediaReference).startsWith("phasset:"))) {
 						const d = document.createElement("div")
 						d.className = "block"
@@ -1006,6 +1155,7 @@
 					renderBlockMarkdown(div, blockMarkdown(b))
 					reader.appendChild(div)
 				}
+				flushGallery()
 
 				detailBodyEl.appendChild(reader)
 				window.scrollTo(0, 0)

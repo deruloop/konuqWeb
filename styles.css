@@ -629,17 +629,144 @@ a{color:inherit;text-decoration:none}
 }
 
 .media{
-	border-radius:18px;
-	border:1px solid var(--border);
-	overflow:hidden;
-	background:rgba(15,23,42,.04);
 	margin:12px 0;
+	--cols:1;
 }
 
+/* Photos as the editor shows them: rounded, cropped to the block's height. */
 .media img{
 	width:100%;
-	height:auto;
 	display:block;
+	object-fit:cover;
+	border-radius:16px;
+	background:rgba(15,23,42,.04);
+	cursor:zoom-in;
+}
+
+/* The carousel: one photo per page, several side by side on wide screens, snapping per photo. */
+.galleryTrack{
+	display:flex;
+	gap:8px;
+	overflow-x:auto;
+	scroll-snap-type:x mandatory;
+	scrollbar-width:none;
+	-webkit-overflow-scrolling:touch;
+}
+.galleryTrack::-webkit-scrollbar{display:none}
+.mediaPage{
+	margin:0;
+	flex:0 0 100%;
+	min-width:0;
+	scroll-snap-align:start;
+}
+.gallery .mediaPage{
+	flex-basis:calc((100% - 8px * (var(--cols) - 1)) / var(--cols));
+}
+.mediaCaption{
+	min-height:30px;
+	padding:6px 8px 4px;
+	text-align:center;
+	font-size:.9em;
+	font-style:italic;
+	color:var(--muted);
+}
+.mediaCaption .block{margin:0;padding:0}
+.galleryDots{
+	display:flex;
+	justify-content:center;
+	gap:9px;
+	padding:2px 0 6px;
+}
+.galleryDot{
+	width:7px;
+	height:7px;
+	border-radius:50%;
+	border:0;
+	padding:0;
+	background:rgba(15,23,42,.25);
+	cursor:pointer;
+}
+.galleryDot.on{background:rgba(15,23,42,.9)}
+
+/* Full screen on black, swiping through the carousel, each photo with its caption. */
+.lightbox{
+	position:fixed;
+	inset:0;
+	z-index:1000;
+	background:#000;
+	cursor:zoom-out;
+}
+.lightboxTrack{
+	position:absolute;
+	inset:0;
+	display:flex;
+	overflow-x:auto;
+	scroll-snap-type:x mandatory;
+	scrollbar-width:none;
+	-webkit-overflow-scrolling:touch;
+}
+.lightboxTrack::-webkit-scrollbar{display:none}
+.lightboxPage{
+	position:relative;
+	margin:0;
+	flex:0 0 100%;
+	min-width:100%;
+	height:100%;
+	scroll-snap-align:start;
+	display:flex;
+	align-items:center;
+	justify-content:center;
+}
+.lightboxPage img{
+	max-width:100%;
+	max-height:100%;
+	object-fit:contain;
+	cursor:default;
+}
+.lightboxCaption{
+	position:absolute;
+	left:50%;
+	bottom:calc(36px + env(safe-area-inset-bottom));
+	transform:translateX(-50%);
+	max-width:calc(100% - 48px);
+	padding:8px 14px;
+	border-radius:12px;
+	background:rgba(0,0,0,.55);
+	color:rgba(255,255,255,.92);
+	font-size:.95em;
+	font-style:italic;
+	text-align:center;
+	cursor:default;
+}
+.lightboxCaption .block{margin:0;padding:0;color:inherit}
+.lightboxClose{
+	position:absolute;
+	top:calc(12px + env(safe-area-inset-top));
+	right:16px;
+	width:36px;
+	height:36px;
+	border:0;
+	border-radius:50%;
+	background:rgba(255,255,255,.18);
+	color:#fff;
+	font-size:22px;
+	line-height:36px;
+	cursor:pointer;
+}
+.lightboxDots{
+	position:absolute;
+	left:0;
+	right:0;
+	bottom:calc(8px + env(safe-area-inset-bottom));
+	padding:0;
+}
+.lightboxDots .galleryDot{background:rgba(255,255,255,.35)}
+.lightboxDots .galleryDot.on{background:#fff}
+
+@media (prefers-color-scheme: dark){
+	.media img{background:rgba(226,232,240,.06)}
+	.galleryDot{background:rgba(226,232,240,.25)}
+	.galleryDot.on{background:rgba(226,232,240,.9)}
 }
 
 .stopCard{
