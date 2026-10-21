@@ -533,6 +533,8 @@ a{color:inherit;text-decoration:none}
 	text-shadow:0 1px 6px rgba(0,0,0,.45);
 }
 .noteCardPoster .noteCardDate{color:rgba(255,255,255,.8)}
+/* The chips sit on their own background: no text shadow there. */
+.noteCardPoster .noteCardTag{text-shadow:none}
 /* Text-only cards in a poster collection stand as tall as the photo cards, text at the top. */
 .noteCards.layout-poster .noteCardListFallback{display:block;min-height:300px}
 
