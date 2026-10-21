@@ -460,8 +460,16 @@ a{color:inherit;text-decoration:none}
 .noteCards.layout-poster,
 .noteCards.layout-compact{grid-template-columns:1fr}
 .noteCards.layout-grid{grid-template-columns:repeat(2, minmax(0, 1fr))}
+/* Wide screens: every layout spreads over at least two columns, the grid over three. */
 @media (min-width:900px){
+	.noteCards.layout-list,
+	.noteCards.layout-cover,
+	.noteCards.layout-poster,
+	.noteCards.layout-compact{grid-template-columns:repeat(2, minmax(0, 1fr))}
 	.noteCards.layout-grid{grid-template-columns:repeat(3, minmax(0, 1fr))}
+}
+@media (min-width:1400px){
+	.noteCards.layout-grid{grid-template-columns:repeat(4, minmax(0, 1fr))}
 }
 .noteCards.layout-list .noteCard{
 	display:flex;
