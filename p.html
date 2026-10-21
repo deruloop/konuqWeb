@@ -330,6 +330,20 @@
 				return "Untitled"
 			}
 
+			// The note's first photo, as the app's list thumbnail: the first top-level
+			// IMAGE block whose file is in the published media index.
+			const noteThumbnailURL = (note) => {
+				const blocks = (note.blocks || []).slice().sort((a, c) => Number(a.position || 0) - Number(c.position || 0))
+				for (const b of blocks) {
+					if (b.type !== "IMAGE" || b.parentId) continue
+					const ref = String(b.mediaReference || "")
+					if (!ref.startsWith("media:")) continue
+					const url = resolveImageURL(ref)
+					if (url) return url
+				}
+				return null
+			}
+
 			const notePreviewFromBlocks = (note) => {
 				const blocks = (note.blocks || []).filter((b) => b.type !== "TITLE")
 				for (const b of blocks) {
@@ -580,19 +594,46 @@
 					return
 				}
 
+				// The collection's layout, chosen in the app: list (photo on the right),
+				// cover (photo large on top), grid (two per row) or compact (slim rows).
+				const layout = ["list", "cover", "grid", "compact"].includes(collection.layout) ? collection.layout : "list"
 				const cards = document.createElement("div")
-				cards.className = "noteCards"
+				cards.className = `noteCards layout-${layout}`
 				for (const n of notes) {
 					const card = document.createElement("div")
 					card.className = "noteCard"
+					const thumbURL = noteThumbnailURL(n)
+					if (thumbURL && layout !== "list") {
+						const img = document.createElement("img")
+						img.className = "noteCardPhoto"
+						img.loading = "lazy"
+						img.decoding = "async"
+						img.src = thumbURL
+						img.alt = ""
+						card.appendChild(img)
+					}
+					const text = document.createElement("div")
+					text.className = "noteCardText"
 					const h = document.createElement("div")
 					h.className = "noteCardTitle"
 					h.textContent = noteTitleFromBlocks(n)
-					const p = document.createElement("p")
-					p.className = "noteCardPreview"
-					p.textContent = notePreviewFromBlocks(n)
-					card.appendChild(h)
-					card.appendChild(p)
+					text.appendChild(h)
+					if (layout === "list" || layout === "cover") {
+						const p = document.createElement("p")
+						p.className = "noteCardPreview"
+						p.textContent = notePreviewFromBlocks(n)
+						text.appendChild(p)
+					}
+					card.appendChild(text)
+					if (thumbURL && layout === "list") {
+						const img = document.createElement("img")
+						img.className = "noteCardThumb"
+						img.loading = "lazy"
+						img.decoding = "async"
+						img.src = thumbURL
+						img.alt = ""
+						card.appendChild(img)
+					}
 					card.addEventListener("click", () => navigate({ collectionId, noteUuid: n.uuid }))
 					cards.appendChild(card)
 				}

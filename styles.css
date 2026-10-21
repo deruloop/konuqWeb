@@ -452,6 +452,68 @@ a{color:inherit;text-decoration:none}
 	.noteCards{grid-template-columns:1fr}
 }
 
+/* Collection layouts, the same four as the app. */
+.noteCards.layout-list,
+.noteCards.layout-cover,
+.noteCards.layout-compact{grid-template-columns:1fr}
+.noteCards.layout-grid{grid-template-columns:repeat(2, minmax(0, 1fr))}
+@media (min-width:900px){
+	.noteCards.layout-grid{grid-template-columns:repeat(3, minmax(0, 1fr))}
+}
+.noteCards.layout-list .noteCard{
+	display:flex;
+	align-items:center;
+	gap:14px;
+}
+.noteCards.layout-list .noteCardText{flex:1 1 auto;min-width:0}
+.noteCardThumb{
+	flex:0 0 auto;
+	width:72px;
+	height:72px;
+	object-fit:cover;
+	border-radius:18px;
+	border:1px solid rgba(15,23,42,.06);
+}
+.noteCards.layout-cover .noteCard,
+.noteCards.layout-grid .noteCard{padding:0;overflow:hidden}
+.noteCards.layout-cover .noteCardText,
+.noteCards.layout-grid .noteCardText{padding:14px 14px 12px}
+.noteCardPhoto{
+	display:block;
+	width:100%;
+	object-fit:cover;
+}
+.noteCards.layout-cover .noteCardPhoto{height:220px}
+.noteCards.layout-grid .noteCardPhoto{height:130px}
+.noteCards.layout-grid .noteCardTitle{
+	margin:0;
+	display:-webkit-box;
+	-webkit-line-clamp:2;
+	-webkit-box-orient:vertical;
+	overflow:hidden;
+}
+.noteCards.layout-compact{gap:8px}
+.noteCards.layout-compact .noteCard{
+	display:flex;
+	align-items:center;
+	gap:12px;
+	padding:10px 14px;
+}
+.noteCards.layout-compact .noteCardText{flex:1 1 auto;min-width:0}
+.noteCards.layout-compact .noteCardTitle{
+	margin:0;
+	white-space:nowrap;
+	overflow:hidden;
+	text-overflow:ellipsis;
+}
+.noteCards.layout-compact .noteCardPhoto{
+	flex:0 0 auto;
+	width:44px;
+	height:44px;
+	border-radius:12px;
+	order:2;
+}
+
 .noteCard{
 	border-radius:18px;
 	border:1px solid var(--border);
