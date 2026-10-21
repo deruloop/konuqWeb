@@ -485,6 +485,8 @@ a{color:inherit;text-decoration:none}
 }
 .noteCards.layout-cover .noteCardPhoto{height:220px}
 .noteCards.layout-grid .noteCardPhoto{height:130px}
+.noteCardPhotoEmpty{background:rgba(103,134,116,.10)}
+.noteCards.layout-grid .noteCard{display:flex;flex-direction:column}
 .noteCards.layout-grid .noteCardTitle{
 	margin:0;
 	display:-webkit-box;
