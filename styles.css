@@ -514,6 +514,7 @@ a{color:inherit;text-decoration:none}
 	inset:0;
 	width:100%;
 	height:100%;
+	z-index:0;
 }
 /* The gradient spans the whole card, as in the app, so there is no visible step. */
 .noteCardPoster::before{
@@ -522,19 +523,39 @@ a{color:inherit;text-decoration:none}
 	inset:0;
 	background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.25) 45%, rgba(0,0,0,.78) 100%);
 	pointer-events:none;
+	z-index:1;
 }
 .noteCardPoster .noteCardText{
 	position:relative;
+	z-index:2;
 	padding:14px 16px;
 	color:#fff;
 	text-shadow:0 1px 6px rgba(0,0,0,.45);
 }
-/* Text-only cards in a poster collection stand as tall as the photo cards. */
-.noteCards.layout-poster .noteCardListFallback{min-height:300px}
+.noteCardPoster .noteCardDate{color:rgba(255,255,255,.8)}
+/* Text-only cards in a poster collection stand as tall as the photo cards, text at the top. */
+.noteCards.layout-poster .noteCardListFallback{display:block;min-height:300px}
+
+/* Tag chips and the date line, as on the app's cards. */
+.noteCardTags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.noteCardTag{
+	padding:5px 13px;
+	border-radius:999px;
+	font-size:13px;
+	font-weight:600;
+	color:var(--accent);
+	background:var(--tag1);
+}
+.tagTone2{background:var(--tag2)}
+.tagTone3{background:var(--tag3)}
+.tagTone4{background:var(--tag4)}
+.tagTone5{background:var(--tag5)}
+.tagTone6{background:var(--tag6)}
+.noteCardDate{margin-top:12px;font-size:12px;color:var(--accent)}
+.noteCards.layout-compact .noteCardDate{margin-top:2px}
 .noteCardPoster .noteCardTitle{color:#fff}
 .noteCardPoster .noteCardPreview{color:rgba(255,255,255,.85)}
-.noteCards.layout-poster .noteCardListFallback{display:flex;align-items:center;gap:14px}
-.noteCards.layout-poster .noteCardListFallback .noteCardText{flex:1 1 auto;min-width:0}
+.noteCards.layout-poster .noteCardListFallback{display:block}
 .noteCards.layout-grid .noteCard{display:flex;flex-direction:column}
 .noteCards.layout-grid .noteCardTitle{
 	margin:0;

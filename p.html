@@ -344,6 +344,27 @@
 				return resolveImageURL(ref)
 			}
 
+			// A stable tone per tag from the six tag colours, so a tag keeps its chip colour.
+			const tagTone = (tag) => {
+				let h = 0
+				for (const ch of String(tag)) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+				return (h % 6) + 1
+			}
+
+			// The app's card date: relative while recent, then a short date.
+			const formatNoteDate = (ms) => {
+				const n = Number(ms || 0)
+				if (!n) return ""
+				const date = new Date(n)
+				const seconds = (Date.now() - n) / 1000
+				if (seconds < 60) return "Just now"
+				if (seconds < 3600) return `${Math.max(1, Math.floor(seconds / 60))}m ago`
+				if (seconds < 86400) return `${Math.max(1, Math.floor(seconds / 3600))}h ago`
+				const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
+				if (date.toDateString() === yesterday.toDateString()) return "Yesterday"
+				return date.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", year: "numeric" })
+			}
+
 			const notePreviewFromBlocks = (note) => {
 				const blocks = (note.blocks || []).filter((b) => b.type !== "TITLE")
 				for (const b of blocks) {
@@ -630,6 +651,26 @@
 						p.className = "noteCardPreview"
 						p.textContent = notePreviewFromBlocks(n)
 						text.appendChild(p)
+						// Tag chips, as on the app's cards.
+						const tags = (n.tags || []).map(normalizedTagKey).filter(Boolean)
+						if (tags.length) {
+							const row = document.createElement("div")
+							row.className = "noteCardTags"
+							for (const t of tags) {
+								const chip = document.createElement("span")
+								chip.className = `noteCardTag tagTone${tagTone(t)}`
+								chip.textContent = t
+								row.appendChild(chip)
+							}
+							text.appendChild(row)
+						}
+					}
+					const when = formatNoteDate(n.lastEditingDate)
+					if (when) {
+						const d = document.createElement("div")
+						d.className = "noteCardDate"
+						d.textContent = when
+						text.appendChild(d)
 					}
 					card.appendChild(text)
 					if (thumbURL && (layout === "list" || (layout === "poster" && !card.classList.contains("noteCardPoster")))) {
