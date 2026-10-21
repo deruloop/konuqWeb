@@ -403,7 +403,8 @@ a{color:inherit;text-decoration:none}
 }
 
 .detailHead{
-	margin:2px 0 14px;
+	/* Breathing room between a collection's header and its first card, as in the app. */
+	margin:2px 0 22px;
 }
 
 .detailHead h2{
@@ -446,6 +447,7 @@ a{color:inherit;text-decoration:none}
 	display:grid;
 	grid-template-columns:repeat(2, minmax(0, 1fr));
 	gap:12px;
+	padding-bottom:32px;
 }
 
 @media (max-width:720px){
