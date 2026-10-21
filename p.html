@@ -596,13 +596,15 @@
 
 				// The collection's layout, chosen in the app: list (photo on the right),
 				// cover (photo large on top), grid (two per row) or compact (slim rows).
-				const layout = ["list", "cover", "grid", "compact"].includes(collection.layout) ? collection.layout : "list"
+				const layout = ["list", "cover", "poster", "grid", "compact"].includes(collection.layout) ? collection.layout : "list"
 				const cards = document.createElement("div")
 				cards.className = `noteCards layout-${layout}`
 				for (const n of notes) {
 					const card = document.createElement("div")
 					card.className = "noteCard"
 					const thumbURL = noteThumbnailURL(n)
+					// Poster needs a photo to sit on; without one the card falls back to list.
+					if (layout === "poster") card.className = thumbURL ? "noteCard noteCardPoster" : "noteCard noteCardListFallback"
 					if (thumbURL && layout !== "list") {
 						const img = document.createElement("img")
 						img.className = "noteCardPhoto"
@@ -623,14 +625,14 @@
 					h.className = "noteCardTitle"
 					h.textContent = noteTitleFromBlocks(n)
 					text.appendChild(h)
-					if (layout === "list" || layout === "cover") {
+					if (layout === "list" || layout === "cover" || layout === "poster") {
 						const p = document.createElement("p")
 						p.className = "noteCardPreview"
 						p.textContent = notePreviewFromBlocks(n)
 						text.appendChild(p)
 					}
 					card.appendChild(text)
-					if (thumbURL && layout === "list") {
+					if (thumbURL && (layout === "list" || (layout === "poster" && !card.classList.contains("noteCardPoster")))) {
 						const img = document.createElement("img")
 						img.className = "noteCardThumb"
 						img.loading = "lazy"
