@@ -332,18 +332,16 @@
 				return "Untitled"
 			}
 
-			// The note's first photo, as the app's list thumbnail: the first top-level
-			// IMAGE block whose file is in the published media index.
+			// The app's thumbnail rule: only a photo that is the note's very first block
+			// (lowest position among top-level blocks) stands for the note.
 			const noteThumbnailURL = (note) => {
-				const blocks = (note.blocks || []).slice().sort((a, c) => Number(a.position || 0) - Number(c.position || 0))
-				for (const b of blocks) {
-					if (b.type !== "IMAGE" || b.parentId) continue
-					const ref = String(b.mediaReference || "")
-					if (!ref.startsWith("media:")) continue
-					const url = resolveImageURL(ref)
-					if (url) return url
-				}
-				return null
+				const first = (note.blocks || [])
+					.filter((b) => !b.parentId)
+					.sort((a, c) => (Number(a.position || 0) - Number(c.position || 0)) || String(a.id || "").localeCompare(String(c.id || "")))[0]
+				if (!first || first.type !== "IMAGE") return null
+				const ref = String(first.mediaReference || "")
+				if (!ref.startsWith("media:")) return null
+				return resolveImageURL(ref)
 			}
 
 			const notePreviewFromBlocks = (note) => {
@@ -615,8 +613,8 @@
 						img.src = thumbURL
 						img.alt = ""
 						card.appendChild(img)
-					} else if (layout === "grid") {
-						// Keeps every grid card the same height, as the app does.
+					} else if (layout === "grid" || layout === "cover") {
+						// Keeps every card the same height, photo or not, as the app does.
 						const slot = document.createElement("div")
 						slot.className = "noteCardPhoto noteCardPhotoEmpty"
 						card.appendChild(slot)
