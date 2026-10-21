@@ -93,7 +93,9 @@
 				return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${encodeURIComponent(shareId)}/${path}`
 			}
 
-			const payloadURL = (shareId) => storagePublicURL(shareId, "payload.json")
+			// A fresh query string each load: the storage CDN caches objects by URL for an
+			// hour, and a republished hub must show up right away.
+			const payloadURL = (shareId) => `${storagePublicURL(shareId, "payload.json")}?v=${Date.now()}`
 
 			const COLOR_ASSET_TO_CSS_VAR = {
 				appAccentColor: "--accent",
