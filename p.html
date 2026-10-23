@@ -790,6 +790,46 @@
 				if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)))
 			}
 
+			// A location link (`[📍 name](Apple Maps URL)`) renders as the same chip the app
+			// draws: pin, name, area and a small arrow on a tint taken from `kq-tint`, the area
+			// from `kq-area`. Anything else returns null and stays an ordinary link.
+			const renderLocationChip = (label, url) => {
+				const trimmed = (label || "").trim()
+				if (!trimmed.startsWith("📍")) return null
+				let parsed
+				try { parsed = new URL(url) } catch { return null }
+				if (!/(^|\.)maps\.apple\.com$/i.test(parsed.hostname)) return null
+				const name = trimmed.replace(/^📍\s*/, "") || parsed.searchParams.get("q") || "Location"
+				const area = (parsed.searchParams.get("kq-area") || "").trim()
+				const tint = (parsed.searchParams.get("kq-tint") || "").trim()
+				const a = document.createElement("a")
+				a.className = "locationChip"
+				a.href = parsed.toString()
+				a.target = "_blank"
+				a.rel = "noopener noreferrer"
+				if (/^[0-9a-f]{6}$/i.test(tint)) a.style.setProperty("--chip-tint", `#${tint}`)
+				const pin = document.createElement("span")
+				pin.className = "locationChipPin"
+				pin.textContent = "📍"
+				const nameEl = document.createElement("span")
+				nameEl.className = "locationChipName"
+				nameEl.textContent = name
+				a.append(pin, nameEl)
+				if (area && area.toLowerCase() !== name.toLowerCase()) {
+					const areaEl = document.createElement("span")
+					areaEl.className = "locationChipArea"
+					areaEl.textContent = area
+					a.append(areaEl)
+				}
+				const arrow = document.createElement("span")
+				arrow.className = "locationChipArrow"
+				arrow.setAttribute("aria-hidden", "true")
+				arrow.textContent = "↗"
+				a.append(arrow)
+				a.setAttribute("aria-label", area ? `${name}, ${area}` : name)
+				return a
+			}
+
 			const renderInlineMarkdown = (text, autoLink = true) => {
 				const frag = document.createDocumentFragment()
 				let src = String(text ?? "")
@@ -821,7 +861,10 @@
 						const inner = tok.match(/^\[([^\]]*)\]\(([^)\s]+)\)$/)
 						const label = inner ? inner[1] : tok
 						const url = inner ? inner[2] : ""
-						if (url && INLINE_SAFE_SCHEME.test(url)) {
+						const chip = url ? renderLocationChip(label, url) : null
+						if (chip) {
+							frag.appendChild(chip)
+						} else if (url && INLINE_SAFE_SCHEME.test(url)) {
 							const a = document.createElement("a")
 							a.className = "mdLink"
 							a.href = url
